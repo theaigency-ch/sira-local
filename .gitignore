@@ -1,2 +1,5 @@
 node_modules/
 .DS_Store
+n8n_data/
+redis_data/
+qdrant_storage/
