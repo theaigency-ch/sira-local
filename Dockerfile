@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-14';
-const SW_VER  = 'v21';
+const PWA_VER = '2025-10-15-15';
+const SW_VER  = 'v22';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -571,39 +571,42 @@ async function qdrantSearchMemory(query, limit=3){
 
 // Speichere Fakt in Qdrant Facts Collection
 async function qdrantStoreFact(text){
-  if(!QDRANT_URL || !text) {
-    console.log('[Qdrant] Fakt-Speicherung übersprungen - URL oder Text fehlt');
+  if(!QDRANT_URL || !text || text.length < 5) {
+    console.log('[Qdrant] Fakt-Speicherung übersprungen - URL fehlt oder Text zu kurz:', text);
     return false;
   }
   try{
-    console.log('[Qdrant] Erstelle Embedding für Fakt...');
+    console.log('[Qdrant] Erstelle Embedding für Fakt:', text.slice(0, 100));
     const embedding = await createEmbedding(text);
-    if(!embedding) {
-      console.log('[Qdrant] Embedding-Erstellung fehlgeschlagen');
+    if(!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+      console.log('[Qdrant] Embedding-Erstellung fehlgeschlagen oder leer');
       return false;
     }
     
     const timestamp = Date.now();
-    const id = 'fact_' + timestamp;
+    const id = timestamp; // Qdrant akzeptiert auch Zahlen als ID
     
-    console.log('[Qdrant] Speichere Fakt mit ID:', id);
+    console.log('[Qdrant] Speichere Fakt mit ID:', id, '- Vektor-Länge:', embedding.length);
+    const payload = {
+      points: [{
+        id: id,
+        vector: embedding,
+        payload: {text, timestamp, type: 'fact'}
+      }]
+    };
+    
     const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_FACTS_COLLECTION+'/points',{
       method:'PUT',
       headers:{'content-type':'application/json'},
-      body: JSON.stringify({
-        points: [{
-          id: id,
-          vector: embedding,
-          payload: {text, timestamp, type: 'fact'}
-        }]
-      })
+      body: JSON.stringify(payload)
     },10000);
     
     if(r.ok){
       console.log('[Qdrant] Fakt gespeichert:', text.slice(0, 100));
       return true;
     } else {
-      console.log('[Qdrant] Fakt-Speicherung fehlgeschlagen, Status:', r.status);
+      const errorText = await r.text();
+      console.log('[Qdrant] Fakt-Speicherung fehlgeschlagen, Status:', r.status, 'Error:', errorText);
       return false;
     }
   }catch(e){
@@ -643,16 +646,17 @@ async function qdrantSearchFacts(query, limit=3){
 // Erkenne "Merke dir" Keywords und extrahiere Fakt
 function extractFactFromText(text){
   const keywords = [
-    /merke?\s+dir:?\s*(.+)/i,
-    /speichere?:?\s+(.+)/i,
-    /speichere?\s+das:?\s*(.+)/i,
-    /lege?\s+das\s+in\s+langzeitspeicher:?\s*(.+)/i,
-    /lege?\s+in\s+langzeitspeicher:?\s*(.+)/i
+    /merke?\s+dir[,:]?\s*(.+)/i,
+    /speichere?[,:]?\s*(.+)/i,
+    /speichere?\s+das[,:]?\s*(.+)/i,
+    /lege?\s+das\s+in\s+(?:den\s+)?langzeitspeicher[,:]?\s*(.+)/i,
+    /lege?\s+in\s+(?:den\s+)?langzeitspeicher[,:]?\s*(.+)/i,
+    /in\s+(?:den\s+)?langzeitspeicher\s+ablegen[,:]?\s*(.+)/i
   ];
   
   for(const regex of keywords){
     const match = text.match(regex);
-    if(match && match[1]){
+    if(match && match[1] && match[1].trim().length > 5){
       return match[1].trim();
     }
   }
