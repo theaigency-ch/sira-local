@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-12';
-const SW_VER  = 'v19';
+const PWA_VER = '2025-10-15-14';
+const SW_VER  = 'v21';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -372,10 +372,14 @@ async function askText(q){
     }
 
     // Prüfe auf "Merke dir" Keywords und speichere Fakt
+    console.log('[Facts] Prüfe User-Input:', userQ.slice(0, 100));
     const fact = extractFactFromText(userQ);
     if(fact){
       console.log('[Facts] Erkannter Fakt:', fact);
-      await qdrantStoreFact(fact);
+      const stored = await qdrantStoreFact(fact);
+      console.log('[Facts] Speicherung erfolgreich:', stored);
+    } else {
+      console.log('[Facts] Kein Keyword erkannt');
     }
     
     if (MEM_AUTOSAVE && text1){ memAppend(`User: ${userQ}`); memAppend(`Sira: ${text1}`); }
@@ -567,14 +571,22 @@ async function qdrantSearchMemory(query, limit=3){
 
 // Speichere Fakt in Qdrant Facts Collection
 async function qdrantStoreFact(text){
-  if(!QDRANT_URL || !text) return false;
+  if(!QDRANT_URL || !text) {
+    console.log('[Qdrant] Fakt-Speicherung übersprungen - URL oder Text fehlt');
+    return false;
+  }
   try{
+    console.log('[Qdrant] Erstelle Embedding für Fakt...');
     const embedding = await createEmbedding(text);
-    if(!embedding) return false;
+    if(!embedding) {
+      console.log('[Qdrant] Embedding-Erstellung fehlgeschlagen');
+      return false;
+    }
     
     const timestamp = Date.now();
     const id = 'fact_' + timestamp;
     
+    console.log('[Qdrant] Speichere Fakt mit ID:', id);
     const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_FACTS_COLLECTION+'/points',{
       method:'PUT',
       headers:{'content-type':'application/json'},
@@ -590,8 +602,10 @@ async function qdrantStoreFact(text){
     if(r.ok){
       console.log('[Qdrant] Fakt gespeichert:', text.slice(0, 100));
       return true;
+    } else {
+      console.log('[Qdrant] Fakt-Speicherung fehlgeschlagen, Status:', r.status);
+      return false;
     }
-    return false;
   }catch(e){
     console.log('[Qdrant] Fakt-Speicher-Fehler:', e.message);
     return false;
@@ -1015,12 +1029,19 @@ const srv=http.createServer(async (req,res)=>{
     const userMsg=(b&&b.user||'').toString().trim();
     const assistantMsg=(b&&b.assistant||'').toString().trim();
     
+    console.log('[Realtime] Memory-Save aufgerufen - User:', userMsg.slice(0, 100));
+    
     // Prüfe auf "Merke dir" Keywords im User-Text
     if(userMsg){
+      console.log('[Facts] Prüfe Realtime User-Input:', userMsg.slice(0, 100));
       const fact = extractFactFromText(userMsg);
       if(fact){
         console.log('[Facts] Erkannter Fakt (Realtime):', fact);
-        qdrantStoreFact(fact); // async, ohne await (non-blocking)
+        qdrantStoreFact(fact).then(stored => {
+          console.log('[Facts] Realtime-Speicherung erfolgreich:', stored);
+        });
+      } else {
+        console.log('[Facts] Kein Keyword in Realtime erkannt');
       }
       memAppend('User(Realtime): ' + userMsg);
     }
