@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-15';
-const SW_VER  = 'v22';
+const PWA_VER = '2025-10-15-16';
+const SW_VER  = 'v23';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -646,18 +646,22 @@ async function qdrantSearchFacts(query, limit=3){
 // Erkenne "Merke dir" Keywords und extrahiere Fakt
 function extractFactFromText(text){
   const keywords = [
-    /merke?\s+dir[,:]?\s*(.+)/i,
-    /speichere?[,:]?\s*(.+)/i,
-    /speichere?\s+das[,:]?\s*(.+)/i,
-    /lege?\s+das\s+in\s+(?:den\s+)?langzeitspeicher[,:]?\s*(.+)/i,
-    /lege?\s+in\s+(?:den\s+)?langzeitspeicher[,:]?\s*(.+)/i,
-    /in\s+(?:den\s+)?langzeitspeicher\s+ablegen[,:]?\s*(.+)/i
+    /merke?\s+dir[,!:;\s]+(.+)/i,
+    /speichere?[,!:;\s]+(.+)/i,
+    /speichere?\s+das[,!:;\s]+(.+)/i,
+    /lege?\s+das\s+in\s+(?:den\s+)?langzeitspeicher[,!:;\s]+(.+)/i,
+    /lege?\s+in\s+(?:den\s+)?langzeitspeicher[,!:;\s]+(.+)/i,
+    /in\s+(?:den\s+)?langzeitspeicher\s+ablegen[,!:;\s]+(.+)/i
   ];
   
   for(const regex of keywords){
     const match = text.match(regex);
-    if(match && match[1] && match[1].trim().length > 5){
-      return match[1].trim();
+    if(match && match[1]){
+      // Entferne führende Satzzeichen und Whitespace
+      let fact = match[1].trim().replace(/^[,!:;\s]+/, '');
+      if(fact.length > 5){
+        return fact;
+      }
     }
   }
   return null;
