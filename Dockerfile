@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-10';
-const SW_VER  = 'v17';
+const PWA_VER = '2025-10-15-11';
+const SW_VER  = 'v18';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -863,6 +863,39 @@ const srv=http.createServer(async (req,res)=>{
     const r = await redisPing();
     const q = QU ? await qdrantCheck(QU) : {ok:false,err:'unset'};
     noStore(res,'application/json'); return res.end(JSON.stringify({redis:{set:!!RU,ok:!!r.ok,raw:r.raw,err:r.err},qdrant:{set:!!QU,ok:!!q.ok,status:q.status,err:q.err}}));
+  }
+  
+  // Qdrant Collections Info
+  if (req.method==='GET' && p==='/sira/diag/qdrant'){
+    if(!QDRANT_URL){
+      noStore(res,'application/json'); return res.end(JSON.stringify({ok:false,error:'QDRANT_URL not set'}));
+    }
+    try{
+      const r = await withTimeout(QDRANT_URL+'/collections',{},5000);
+      const js = await r.json();
+      const collections = js?.result?.collections || [];
+      
+      // Hole Details für jede Collection
+      const details = await Promise.all(collections.map(async (col) => {
+        try{
+          const info = await withTimeout(QDRANT_URL+'/collections/'+col.name,{},3000);
+          const infoJs = await info.json();
+          return {
+            name: col.name,
+            points: infoJs?.result?.points_count || 0,
+            vectors: infoJs?.result?.vectors_count || 0
+          };
+        }catch{
+          return {name: col.name, points: '?', vectors: '?'};
+        }
+      }));
+      
+      noStore(res,'application/json'); 
+      return res.end(JSON.stringify({ok:true, collections: details}));
+    }catch(e){
+      noStore(res,'application/json'); 
+      return res.end(JSON.stringify({ok:false, error: e.message}));
+    }
   }
 
   // Memory
