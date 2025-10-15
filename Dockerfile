@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-7';
-const SW_VER  = 'v14';
+const PWA_VER = '2025-10-15-8';
+const SW_VER  = 'v15';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -374,8 +374,16 @@ async function forwardToN8N(json){
 /* ---------------------------- Diag (Redis/Qdrant) -------------------------- */
 async function qdrantCheck(u){
   if(!u) return {ok:false,err:'unset'};
-  try{ const r=await withTimeout(u.replace(/\/+$/,'')+'/readyz',{},3000); return {ok:r.ok,status:r.status} }
-  catch(e){ return {ok:false,err:String(e&&e.message||e)} }
+  try{ 
+    console.log('[Qdrant] Checking connection to:', u);
+    const r=await withTimeout(u.replace(/\/+$/,'')+'/readyz',{},10000); 
+    console.log('[Qdrant] Response:', r.ok, r.status);
+    return {ok:r.ok,status:r.status} 
+  }
+  catch(e){ 
+    console.log('[Qdrant] Connection failed:', e.message);
+    return {ok:false,err:String(e&&e.message||e)} 
+  }
 }
 
 /* ------------------------------ Icon Handling ------------------------------ */
