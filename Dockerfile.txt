@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-17';
-const SW_VER  = 'v24';
+const PWA_VER = '2025-10-01-4';
+const SW_VER  = 'v7';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -72,154 +72,43 @@ async function withTimeout(url,opts={},ms=20000){
 }
 
 /* ------------------------- Redis (RESP minimal) ---------------------------- */
-function parseRedisUrl(u){ 
-  try{ 
-    const m=new URL(u); 
-    return {
-      host: m.hostname,
-      port: Number(m.port||6379),
-      pass: (m.password||'')
-    }
-  }catch{ 
-    return null 
-  } 
-}
+function parseRedisUrl(u){ try{ const m=new URL(u); return {host:m.hostname,port:Number(m.port||6379),pass:(m.password||'')} }catch{ return null } }
 const REDIS = parseRedisUrl(process.env.REDIS_URL||'');
-
-// Logging für Debugging
-if (REDIS) {
-  console.log('[Redis] Konfiguration geladen:', {host: REDIS.host, port: REDIS.port, hasPassword: !!REDIS.pass});
-} else {
-  console.log('[Redis] Keine gültige REDIS_URL gefunden');
-}
-
 function resp(...parts){ return `*${parts.length}\r\n` + parts.map(p=>{const s=String(p); return `$${Buffer.byteLength(s)}\r\n${s}\r\n`}).join(''); }
 function redisExec(cmds){
   return new Promise((resolve)=>{
     if (!REDIS) return resolve({ok:false,err:'no-redis',raw:''});
     const sock=net.connect(REDIS.port, REDIS.host); let buf=''; let done=false;
-    sock.setTimeout(8000); // Erhöht auf 8000ms für bessere Stabilität
+    sock.setTimeout(3000);
     sock.on('connect',()=>{
-      console.log('[Redis] Verbindung hergestellt zu', REDIS.host + ':' + REDIS.port);
       if (REDIS.pass) sock.write(resp('AUTH', REDIS.pass));
       for (const c of cmds) sock.write(c);
       // sauber schließen, um Timeouts zu vermeiden
       sock.write(resp('QUIT'));
     });
     sock.on('data',(d)=> buf += d.toString('utf8'));
-    function finish(ok,extra){ 
-      if(done) return; 
-      done=true; 
-      try{sock.destroy()}catch{}; 
-      if (!ok) console.log('[Redis] Fehler:', extra, 'Host:', REDIS.host, 'Port:', REDIS.port);
-      resolve({ok,...(extra||{}),raw:buf}); 
-    }
-    sock.on('timeout',()=>{
-      console.log('[Redis] Timeout nach 8s - möglicherweise Netzwerkproblem');
-      finish(false,{err:'timeout'});
-    });
-    sock.on('error',(e)=>{
-      console.log('[Redis] Socket-Fehler:', e.message);
-      finish(false,{err:String(e&&e.message||e)});
-    });
+    function finish(ok,extra){ if(done) return; done=true; try{sock.destroy()}catch{}; resolve({ok,...(extra||{}),raw:buf}); }
+    sock.on('timeout',()=>finish(false,{err:'timeout'}));
+    sock.on('error',(e)=>finish(false,{err:String(e&&e.message||e)}));
     sock.on('close',()=>finish(true));
   });
 }
 async function redisSet(key,val){ const r=await redisExec([resp('SET',key,val)]); return r.ok && r.raw && r.raw.includes('+OK'); }
 async function redisGet(key){
   const r=await redisExec([resp('GET',key)]);
-  console.log('[Redis] GET', key, '- Raw response length:', r.raw?.length || 0);
-  if(!r.raw) { console.log('[Redis] GET', key, '- No raw response'); return null; }
-  
-  // Finde die letzte $-Zeile (falls mehrere Antworten in der Response)
-  const lines = r.raw.split('\r\n');
-  let bulkIdx = -1;
-  for(let i = lines.length - 1; i >= 0; i--) {
-    if(lines[i].startsWith('$')) {
-      bulkIdx = i;
-      break;
-    }
-  }
-  
-  if(bulkIdx === -1) { 
-    console.log('[Redis] GET', key, '- No $ bulk string found. First 100 chars:', r.raw.substring(0, 100)); 
-    return null; 
-  }
-  
-  const len = parseInt(lines[bulkIdx].substring(1), 10);
-  if(len < 0) { console.log('[Redis] GET', key, '- Key not found (len=-1)'); return null; }
-  
-  const val = lines[bulkIdx + 1];
-  console.log('[Redis] GET', key, '- Found', len, 'bytes, actual:', val?.length || 0);
-  return val;
+  const m=r.raw && r.raw.match(/^\$(-?\d+)\r\n/);
+  if(!m) return null; const len=parseInt(m[1],10); if(len<0) return null;
+  const off=m[0].length; return r.raw.substr(off,len);
 }
 async function redisPing(){ const r=await redisExec([resp('PING')]); return { ok: !!(r.raw && r.raw.includes('+PONG')), raw:r.raw, err:r.err }; }
 
 const MEM_KEY='sira:memory';
-const MEM_ARCHIVE_THRESHOLD = 50000; // Archiviere wenn > 50k Zeichen
-const MEM_KEEP_RECENT = 8000; // Behalte letzte 8k in Redis
-
-async function memAppend(s){
+function memAppend(s){
   if(!s) return;
-  
-  // Warte bis Memory geladen ist (max 5 Sekunden)
-  let waited = 0;
-  while(!memoryLoaded && waited < 5000) {
-    await new Promise(r => setTimeout(r, 100));
-    waited += 100;
-  }
-  if(!memoryLoaded) console.log('[Redis] WARNUNG: Memory noch nicht geladen, füge trotzdem hinzu');
-  
   MEMORY += (MEMORY ? '\n' : '') + s;
-  
-  // Auto-Archivierung wenn zu groß
-  if(MEMORY.length > MEM_ARCHIVE_THRESHOLD){
-    await archiveOldMemory();
-  }
-  
   if (MEM_MAX && MEMORY.length > MEM_MAX){ MEMORY = MEMORY.slice(-MEM_MAX); }
-  
-  // Versuche Redis-Speicherung mit Retry
-  for(let attempt=1; attempt<=3; attempt++){
-    try{
-      const success = await redisSet(MEM_KEY, MEMORY);
-      if(success){
-        console.log('[Redis] Memory gespeichert (' + MEMORY.length + ' Zeichen)');
-        return;
-      }
-      console.log('[Redis] memAppend Versuch', attempt, 'fehlgeschlagen');
-    }catch(e){
-      console.log('[Redis] memAppend Fehler (Versuch', attempt + '):', e);
-    }
-    if(attempt < 3) await new Promise(r=>setTimeout(r, 1000 * attempt)); // Exponential backoff
-  }
-  console.log('[Redis] Memory konnte nicht gespeichert werden nach 3 Versuchen');
+  redisSet(MEM_KEY, MEMORY).catch(()=>{});
 }
-
-// Archiviere alte Memories nach Qdrant
-async function archiveOldMemory(){
-  if(!QDRANT_URL || MEMORY.length <= MEM_KEEP_RECENT) return;
-  
-  try{
-    const toArchive = MEMORY.slice(0, -MEM_KEEP_RECENT);
-    const timestamp = Date.now();
-    const id = 'mem_' + timestamp;
-    
-    console.log('[Memory] Archiviere', toArchive.length, 'Zeichen nach Qdrant...');
-    const success = await qdrantStoreMemory(id, toArchive, timestamp);
-    
-    if(success){
-      MEMORY = MEMORY.slice(-MEM_KEEP_RECENT);
-      await redisSet(MEM_KEY, MEMORY);
-      console.log('[Memory] Archivierung erfolgreich! Behalte', MEMORY.length, 'Zeichen in Redis');
-    }else{
-      console.log('[Memory] Archivierung fehlgeschlagen');
-    }
-  }catch(e){
-    console.log('[Memory] Archivierungs-Fehler:', e.message);
-  }
-}
-
 function memTail(n=1500){ return MEMORY.slice(-n); }
 
 // Benutzerprofil aus Redis (+Fallback ENV)
@@ -234,58 +123,8 @@ async function loadProfile(){
   };
 }
 
-// Beim Start: Memory aus Redis einlesen + Qdrant Collection erstellen
-let memoryLoaded = false;
-(async()=>{ 
-  try{ 
-    console.log('[Redis] Lade Memory beim Start...');
-    const v=await redisGet(MEM_KEY); 
-    if(v) {
-      MEMORY=v; 
-      console.log('[Redis] Memory geladen:', MEMORY.length, 'Zeichen');
-    } else {
-      console.log('[Redis] Kein Memory gefunden');
-    }
-  }catch(e){ 
-    console.log('[Redis] Fehler beim Laden des Memory:', e); 
-  } finally {
-    memoryLoaded = true;
-    console.log('[Redis] Memory-Initialisierung abgeschlossen');
-  }
-  
-  // Qdrant Collections erstellen (falls nicht vorhanden)
-  if(QDRANT_URL){
-    const collections = [QDRANT_COLLECTION, QDRANT_FACTS_COLLECTION];
-    for(const col of collections){
-      try{
-        console.log('[Qdrant] Prüfe Collection:', col);
-        const r = await withTimeout(QDRANT_URL+'/collections/'+col,{},5000);
-        if(r.status === 404){
-          console.log('[Qdrant] Collection nicht gefunden, erstelle...');
-          const create = await withTimeout(QDRANT_URL+'/collections/'+col,{
-            method:'PUT',
-            headers:{'content-type':'application/json'},
-            body: JSON.stringify({
-              vectors: {
-                size: 1536,
-                distance: 'Cosine'
-              }
-            })
-          },10000);
-          if(create.ok){
-            console.log('[Qdrant] Collection', col, 'erstellt!');
-          }else{
-            console.log('[Qdrant] Collection-Erstellung fehlgeschlagen:', create.status);
-          }
-        }else if(r.ok){
-          console.log('[Qdrant] Collection', col, 'existiert bereits');
-        }
-      }catch(e){
-        console.log('[Qdrant] Initialisierungs-Fehler für', col, ':', e.message);
-      }
-    }
-  }
-})();
+// Beim Start: Memory aus Redis einlesen (best effort)
+(async()=>{ try{ const v=await redisGet(MEM_KEY); if(v) MEMORY=v; }catch{} })();
 
 /* ------------------------- Web Reader (Option A) --------------------------- */
 async function fetchReadable(u){
@@ -314,27 +153,13 @@ async function askText(q){
   const INSTR_BASE = (process.env.SIRA_INSTRUCTIONS || 'Antworte auf Deutsch, knapp und präzise.');
   const profile = await loadProfile();
   const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
-  const shortMem = memTail(8000);
-  
-  // Suche relevante alte Memories + Fakten in Qdrant
-  const oldMemories = await qdrantSearchMemory(userQ, 3);
-  const facts = await qdrantSearchFacts(userQ, 3);
-  
-  const oldMemText = oldMemories.length > 0 
-    ? '\n\n# Relevante frühere Gespräche (aus Archiv):\n' + oldMemories.map((m,i) => `[${i+1}] ${m.text.slice(0,500)}...`).join('\n\n')
-    : '';
-  
-  const factsText = facts.length > 0
-    ? '\n\n# Gespeicherte Fakten (Langzeitspeicher):\n' + facts.map((f,i) => `- ${f.text}`).join('\n')
-    : '';
+  const shortMem = memTail(1500);
 
   const INSTR = INSTR_BASE +
     '\n\n# Benutzerdaten\n' +
     `Benutzerprofil: ${profileLine}\n` +
     'Du DARFST dem Nutzer seine eigenen Kontaktangaben nennen (z. B. seine privaten/geschäftlichen E-Mails), wenn er danach fragt oder wenn sie für eine Aktion (E-Mail-Versand) nötig sind.\n' +
     '\n# Kürzlicher Gesprächskontext (Ausschnitt)\n' + (shortMem || '(leer)') +
-    oldMemText +
-    factsText +
     '\n\nWenn externe/aktuelle Daten nötig sind, antworte EXAKT "__WEB__ <URL>" und NICHTS anderes.';
 
   try{
@@ -371,19 +196,8 @@ async function askText(q){
       return {ok:true,status:200,text:text2,raw:js2, web:{url: got.url, ok: got.ok}};
     }
 
-    // Prüfe auf "Merke dir" Keywords und speichere Fakt
-    console.log('[Facts] Prüfe User-Input:', userQ.slice(0, 100));
-    const fact = extractFactFromText(userQ);
-    if(fact){
-      console.log('[Facts] Erkannter Fakt:', fact);
-      const stored = await qdrantStoreFact(fact);
-      console.log('[Facts] Speicherung erfolgreich:', stored);
-    } else {
-      console.log('[Facts] Kein Keyword erkannt');
-    }
-    
     if (MEM_AUTOSAVE && text1){ memAppend(`User: ${userQ}`); memAppend(`Sira: ${text1}`); }
-    return {ok:true,status:200,text:text1,raw:js1,factStored:!!fact};
+    return {ok:true,status:200,text:text1,raw:js1};
 
   }catch(e){
     return {ok:false,status:0,error:String(e&&e.message||e)}
@@ -413,28 +227,13 @@ async function createRealtimeEphemeral(){
   try{
     const profile = await loadProfile();
     const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
-    const shortMem = memTail(8000);
-    
-    // Für Realtime: Lade Memory + Fakten beim Session-Start
-    const oldMemories = await qdrantSearchMemory('Gesprächskontext Erinnerungen', 2);
-    const facts = await qdrantSearchFacts('Wichtige Fakten Informationen', 5);
-    
-    const oldMemText = oldMemories.length > 0 
-      ? '\n\n# Frühere Gespräche (Archiv):\n' + oldMemories.map(m => m.text.slice(0,400)).join('\n')
-      : '';
-    
-    const factsText = facts.length > 0
-      ? '\n\n# Gespeicherte Fakten (Langzeitspeicher):\n' + facts.map(f => `- ${f.text}`).join('\n')
-      : '';
-    
+    const shortMem = memTail(1000);
     const base = (process.env.SIRA_INSTRUCTIONS || 'Du bist Sira, eine hilfreiche, präzise, deutschsprachige Assistentin.');
     const rtInstr =
       base +
       '\n\n# Benutzerdaten\nBenutzerprofil: ' + profileLine +
       '\nDu DARFST dem Nutzer seine eigenen Kontaktangaben nennen (z. B. seine privaten/geschäftlichen E-Mails), wenn er danach fragt oder wenn sie für eine Aktion nötig sind.' +
       '\n\n# Kürzlicher Gesprächskontext (Ausschnitt)\n' + (shortMem || '(leer)') +
-      oldMemText +
-      factsText +
       '\n\nStandort/Default: Schweiz (de-CH). Bevorzuge .ch-Quellen und CH-Perspektive, ausser explizit anders.' +
       '\nRealtime/v2: Bei E-Mail-Auftrag gib EXAKT "__N8N__ {\\"tool\\":\\"gmail.send\\",\\"to\\":\\"...\\",\\"subject\\":\\"...\\",\\"text\\":\\"...\\"}" und sonst NICHTS.';
 
@@ -466,205 +265,18 @@ async function pingOA(){
 async function forwardToN8N(json){
   if (!N8N) return {status:500,ctype:'application/json',body:JSON.stringify({ok:false,error:'N8N_TASK_URL not set'})};
   try{
-    console.log('[n8n] Sende Anfrage:', JSON.stringify(json));
     const rr = await withTimeout(N8N,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(json||{})},30000);
     const ctype = rr.headers.get('content-type') || 'application/json';
     const body  = await rr.text();
-    console.log('[n8n] Antwort:', rr.status, body);
     return {status: rr.status, ctype, body};
-  }catch(e){ 
-    console.log('[n8n] Fehler:', e);
-    return {status:502, ctype:'application/json', body: JSON.stringify({ok:false,error:'n8n unreachable'})}; 
-  }
+  }catch(e){ return {status:502, ctype:'application/json', body: JSON.stringify({ok:false,error:'n8n unreachable'})}; }
 }
 
 /* ---------------------------- Diag (Redis/Qdrant) -------------------------- */
-const QDRANT_URL = (process.env.QDRANT_URL || '').replace(/\/+$/,'');
-const QDRANT_COLLECTION = 'sira_memory';
-const QDRANT_FACTS_COLLECTION = 'sira_facts';
-
 async function qdrantCheck(u){
   if(!u) return {ok:false,err:'unset'};
-  try{ 
-    console.log('[Qdrant] Checking connection to:', u);
-    const r=await withTimeout(u.replace(/\/+$/,'')+'/readyz',{},10000); 
-    console.log('[Qdrant] Response:', r.ok, r.status);
-    return {ok:r.ok,status:r.status} 
-  }
-  catch(e){ 
-    console.log('[Qdrant] Connection failed:', e.message);
-    return {ok:false,err:String(e&&e.message||e)} 
-  }
-}
-
-// Erstelle Embedding via OpenAI
-async function createEmbedding(text){
-  if(!KEY || !text) return null;
-  try{
-    const r = await withTimeout(BASE+'/v1/embeddings',{
-      method:'POST',
-      headers:{Authorization:'Bearer '+KEY,'content-type':'application/json'},
-      body: JSON.stringify({model:'text-embedding-3-small', input: text.slice(0,8000)})
-    },10000);
-    if(!r.ok) return null;
-    const js = await r.json();
-    return js?.data?.[0]?.embedding || null;
-  }catch(e){
-    console.log('[Embedding] Fehler:', e.message);
-    return null;
-  }
-}
-
-// Speichere Memory-Chunk in Qdrant
-async function qdrantStoreMemory(id, text, timestamp){
-  if(!QDRANT_URL || !text) return false;
-  try{
-    const embedding = await createEmbedding(text);
-    if(!embedding) return false;
-    
-    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION+'/points',{
-      method:'PUT',
-      headers:{'content-type':'application/json'},
-      body: JSON.stringify({
-        points: [{
-          id: id,
-          vector: embedding,
-          payload: {text, timestamp}
-        }]
-      })
-    },10000);
-    return r.ok;
-  }catch(e){
-    console.log('[Qdrant] Store Fehler:', e.message);
-    return false;
-  }
-}
-
-// Suche ähnliche Memories in Qdrant
-async function qdrantSearchMemory(query, limit=3){
-  if(!QDRANT_URL || !query) return [];
-  try{
-    const embedding = await createEmbedding(query);
-    if(!embedding) return [];
-    
-    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION+'/points/search',{
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body: JSON.stringify({
-        vector: embedding,
-        limit: limit,
-        with_payload: true
-      })
-    },10000);
-    if(!r.ok) return [];
-    const js = await r.json();
-    return (js?.result || []).map(item => ({
-      text: item.payload?.text || '',
-      score: item.score || 0,
-      timestamp: item.payload?.timestamp || 0
-    }));
-  }catch(e){
-    console.log('[Qdrant] Search Fehler:', e.message);
-    return [];
-  }
-}
-
-// Speichere Fakt in Qdrant Facts Collection
-async function qdrantStoreFact(text){
-  if(!QDRANT_URL || !text || text.length < 5) {
-    console.log('[Qdrant] Fakt-Speicherung übersprungen - URL fehlt oder Text zu kurz:', text);
-    return false;
-  }
-  try{
-    console.log('[Qdrant] Erstelle Embedding für Fakt:', text.slice(0, 100));
-    const embedding = await createEmbedding(text);
-    if(!embedding || !Array.isArray(embedding) || embedding.length === 0) {
-      console.log('[Qdrant] Embedding-Erstellung fehlgeschlagen oder leer');
-      return false;
-    }
-    
-    const timestamp = Date.now();
-    const id = timestamp; // Qdrant akzeptiert auch Zahlen als ID
-    
-    console.log('[Qdrant] Speichere Fakt mit ID:', id, '- Vektor-Länge:', embedding.length);
-    const payload = {
-      points: [{
-        id: id,
-        vector: embedding,
-        payload: {text, timestamp, type: 'fact'}
-      }]
-    };
-    
-    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_FACTS_COLLECTION+'/points',{
-      method:'PUT',
-      headers:{'content-type':'application/json'},
-      body: JSON.stringify(payload)
-    },10000);
-    
-    if(r.ok){
-      console.log('[Qdrant] Fakt gespeichert:', text.slice(0, 100));
-      return true;
-    } else {
-      const errorText = await r.text();
-      console.log('[Qdrant] Fakt-Speicherung fehlgeschlagen, Status:', r.status, 'Error:', errorText);
-      return false;
-    }
-  }catch(e){
-    console.log('[Qdrant] Fakt-Speicher-Fehler:', e.message);
-    return false;
-  }
-}
-
-// Suche Fakten in Qdrant
-async function qdrantSearchFacts(query, limit=3){
-  if(!QDRANT_URL || !query) return [];
-  try{
-    const embedding = await createEmbedding(query);
-    if(!embedding) return [];
-    
-    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_FACTS_COLLECTION+'/points/search',{
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body: JSON.stringify({
-        vector: embedding,
-        limit: limit,
-        with_payload: true
-      })
-    },10000);
-    if(!r.ok) return [];
-    const js = await r.json();
-    return (js?.result || []).map(item => ({
-      text: item.payload?.text || '',
-      score: item.score || 0
-    }));
-  }catch(e){
-    console.log('[Qdrant] Fakten-Such-Fehler:', e.message);
-    return [];
-  }
-}
-
-// Erkenne "Merke dir" Keywords und extrahiere Fakt
-function extractFactFromText(text){
-  const keywords = [
-    /merke?\s+dir[,!:;\s]+(.+)/i,
-    /speichere?[,!:;\s]+(.+)/i,
-    /speichere?\s+das[,!:;\s]+(.+)/i,
-    /lege?\s+das\s+in\s+(?:den\s+)?langzeitspeicher[,!:;\s]+(.+)/i,
-    /lege?\s+in\s+(?:den\s+)?langzeitspeicher[,!:;\s]+(.+)/i,
-    /in\s+(?:den\s+)?langzeitspeicher\s+ablegen[,!:;\s]+(.+)/i
-  ];
-  
-  for(const regex of keywords){
-    const match = text.match(regex);
-    if(match && match[1]){
-      // Entferne führende Satzzeichen und Whitespace
-      let fact = match[1].trim().replace(/^[,!:;\s]+/, '');
-      if(fact.length > 5){
-        return fact;
-      }
-    }
-  }
-  return null;
+  try{ const r=await withTimeout(u.replace(/\/+$/,'')+'/readyz',{},3000); return {ok:r.ok,status:r.status} }
+  catch(e){ return {ok:false,err:String(e&&e.message||e)} }
 }
 
 /* ------------------------------ Icon Handling ------------------------------ */
@@ -702,7 +314,7 @@ function generatePTT_HTML_V2() {
 <link rel="manifest" href="/sira/rt/v2/manifest.json?ver=${PWA_VER}">
 <title>${APP_NAME}</title>
 <style>
-:root{--bg:#0a0b10;--panel:#0f141b;--border:#1e2733;--mut:#98a2b3;--fg:#e8ecf2;--accent:#b6ef00;--ok:#16a34a;--err:#ef4444}
+:root{--bg:#0a0b10;--panel:#0f141b;--border:#1e2733;--mut:#98a2b3;--fg:#e8ecf2;--ok:#16a34a;--err:#ef4444}
 *{box-sizing:border-box} html,body{height:100%} body{margin:0;background:var(--bg);color:var(--fg);font:16px system-ui,Segoe UI,Roboto,Arial}
 .wrap{min-height:100dvh;display:grid;grid-template-rows:auto 1fr auto}
 .header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px}
@@ -713,15 +325,15 @@ function generatePTT_HTML_V2() {
 .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--err)}
 .pill.ok .dot{background:var(--ok)}
 .card{margin:16px;background:var(--panel);border:1px solid var(--border);border-radius:18px;box-shadow:0 6px 24px rgba(0,0,0,.3)}
-.center{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-height:75vh;padding:24px 24px 80px;gap:32px}
-.mic{width:182px;height:182px;border-radius:50%;display:grid;place-items:center;border:2px solid #2a3442;background:
- radial-gradient(60% 60% at 50% 50%, rgba(182,239,0,.15), transparent 60%), linear-gradient(#131722,#131722);
- box-shadow:0 0 0 0 rgba(182,239,0,.0), 0 18px 40px rgba(0,0,0,.35);
- transition:transform .08s ease, box-shadow .12s ease, border-color .12s ease; cursor:pointer
+.center{display:flex;align-items:center;justify-content:center;min-height:58vh;padding:24px}
+.mic{width:260px;height:260px;border-radius:50%;display:grid;place-items:center;border:2px solid #2a3442;background:
+ radial-gradient(60% 60% at 50% 50%, rgba(124,58,237,.25), transparent 60%), linear-gradient(#131722,#131722);
+ box-shadow:0 0 0 0 rgba(124,58,237,.0), 0 18px 40px rgba(0,0,0,.35);
+ transition:transform .08s ease, box-shadow .12s ease, border-color .12s ease, filter .12s ease; cursor:pointer
 }
-.mic svg{width:56px;height:56px;color:#fff;opacity:.95;filter:drop-shadow(0 0 8px rgba(182,239,0,.4)))}
+.mic svg{width:72px;height:72px;opacity:.95;filter:drop-shadow(0 0 10px rgba(159,103,255,.35))}
 .mic.idle{border-color:#2a3442}
-.mic.active{transform:scale(.985); box-shadow:0 0 40px 8px rgba(182,239,0,.4), 0 0 100px 20px rgba(182,239,0,.2); border-color:rgba(182,239,0,.7)}
+.mic.active{transform:scale(.985); box-shadow:0 0 40px 8px rgba(124,58,237,.35), 0 0 120px 24px rgba(159,103,255,.15); border-color:rgba(124,58,237,.6)}
 .status{font-size:14px;color:var(--mut);text-align:center;padding:0 16px 18px}
 </style>
 </head><body>
@@ -734,10 +346,10 @@ function generatePTT_HTML_V2() {
   <div class="card">
     <div class="center">
       <button id="ptt" class="mic idle" aria-label="Sprechen">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 0-2 0v1a9 9 0 0 0 8 8.94V22a1 1 0 1 0 2 0v-2.06A9 9 0 0 0 21 11v-1a1 1 0 1 0-2 0Z"/></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a1 1 0 1 0-2 0 9 9 0 0 0 8 8.94V22a1 1 0 1 0 2 0v-3.06A9 9 0 0 0 5 10Z"/></svg>
       </button>
-      <div class="status" id="hint">Bereit – Tippe, um zu sprechen</div>
     </div>
+    <div class="status" id="hint">Bereit</div>
   </div>
 
   <div class="status" id="out"></div>
@@ -751,34 +363,6 @@ const ptt=qs('#ptt');
 function setConn(ok){ pill.classList.toggle('ok', ok); st.textContent = ok ? 'Verbunden' : 'Getrennt'; }
 
 let pc=null, mic=null, remote=null, dc=null, talking=false;
-let userTranscript='', assistantTranscript='';
-let autoSaveInterval=null;
-
-async function saveRealtimeMemory(){
-  if(!userTranscript && !assistantTranscript) return;
-  try{
-    await fetch('/sira/rt/memory/save',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-sira-token':FIXED_TOKEN},
-      body: JSON.stringify({user: userTranscript, assistant: assistantTranscript})
-    });
-    console.log('[Memory] Realtime-Gespräch gespeichert:', userTranscript.substring(0,50) + '...');
-    userTranscript=''; assistantTranscript='';
-  }catch(e){
-    console.error('[Memory] Fehler beim Speichern:', e);
-  }
-}
-
-// Automatisches Speichern alle 10 Sekunden
-function startAutoSave(){
-  if(autoSaveInterval) clearInterval(autoSaveInterval);
-  autoSaveInterval = setInterval(()=>{
-    if(userTranscript || assistantTranscript){
-      console.log('[Memory] Auto-Save triggered');
-      saveRealtimeMemory();
-    }
-  }, 10000);
-}
 
 async function connectRealtime(){
   try{
@@ -799,49 +383,7 @@ async function connectRealtime(){
     pc.ontrack = (ev)=>{ remote = document.createElement('audio'); remote.autoplay=true; remote.srcObject = ev.streams[0]; };
 
     dc = pc.createDataChannel('oai-events');
-    dc.onopen = ()=>{
-      // Audio-Transkription aktivieren
-      dc.send(JSON.stringify({
-        type: 'session.update',
-        session: {
-          input_audio_transcription: { model: 'whisper-1' }
-        }
-      }));
-      console.log('[Realtime] Audio-Transkription aktiviert');
-    };
-    dc.onmessage = (e)=>{ 
-      try{ 
-        const js=JSON.parse(e.data); 
-        console.log('[Realtime Event]', js.type);
-        
-        // User Audio-Transkript
-        if(js?.type==='conversation.item.input_audio_transcription.completed'){
-          userTranscript = (userTranscript ? userTranscript + ' ' : '') + (js.transcript || '');
-          console.log('[Memory] User:', js.transcript);
-        }
-        
-        // Assistant Audio-Transkript (wichtig!)
-        if(js?.type==='response.audio_transcript.delta'){
-          assistantTranscript += (js.delta || '');
-        }
-        if(js?.type==='response.audio_transcript.done'){
-          console.log('[Memory] Audio transcript done, saving');
-          saveRealtimeMemory();
-        }
-        
-        // Text-Antworten (falls verwendet)
-        if(js?.type==='response.text.delta'){ 
-          out.textContent += js.delta;
-          assistantTranscript += js.delta;
-        }
-        if(js?.type==='response.text.done'){
-          console.log('[Memory] Text done, saving');
-          saveRealtimeMemory();
-        }
-      }catch(err){ 
-        console.error('[Realtime] Event error:', err);
-      } 
-    };
+    dc.onmessage = (e)=>{ try{ const js=JSON.parse(e.data); if(js?.type==='response.text.delta'){ out.textContent += js.delta; } }catch{} };
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -859,11 +401,8 @@ async function connectRealtime(){
     await pc.setRemoteDescription({ type:'answer', sdp: ans });
 
     setConn(true); hint.textContent='Bereit – Tippe, um zu sprechen';
-    startAutoSave(); // Auto-Save alle 10 Sekunden starten
-    console.log('[Memory] Auto-Save aktiviert (alle 10s)');
   }catch(e){
-    setConn(false); hint.textContent='Realtime nicht verfügbar: ' + e.message;
-    console.error('[Realtime] Fehler:', e);
+    setConn(false); hint.textContent='Realtime nicht verfügbar';
   }
 }
 
@@ -874,23 +413,10 @@ function toggleTalk(){
   ptt.classList.toggle('active', talking);
   ptt.classList.toggle('idle', !talking);
   hint.textContent = talking ? 'Zuhören…' : 'Bereit';
-  
-  // Wenn Sprechen beendet, nach kurzer Verzögerung Memory speichern
-  if(!talking){
-    setTimeout(()=>{ if(!talking) saveRealtimeMemory(); }, 3000);
-  }
 }
 
 ptt.addEventListener('click', toggleTalk);
 document.addEventListener('DOMContentLoaded', connectRealtime);
-
-// Memory beim Verlassen der Seite speichern
-window.addEventListener('beforeunload', ()=>{ 
-  if(userTranscript || assistantTranscript){
-    // Synchroner Fallback für beforeunload
-    navigator.sendBeacon('/sira/rt/memory/save', JSON.stringify({user: userTranscript, assistant: assistantTranscript}));
-  }
-});
 
 /* __N8N__ Bridge: wenn Modell "__N8N__ {..}" ausgibt, an Server forwarden */
 let __bridgeBusy=false;
@@ -902,20 +428,14 @@ new MutationObserver(async ()=>{
     try{
       const payload = JSON.parse(t.slice(8));
       hint.textContent = 'Sende Aktion…';
-      console.log('[n8n Bridge] Sende:', payload);
       const r = await fetch('/sira/input',{
         method:'POST',
         headers:{'content-type':'application/json','x-sira-token':FIXED_TOKEN},
         body: JSON.stringify(payload)
       });
-      const respText = await r.text();
-      console.log('[n8n Bridge] Antwort:', r.status, respText);
       out.textContent = out.textContent + '\\n[Aktion ausgeführt: ' + r.status + ']';
-      hint.textContent = 'Bereit';
     }catch(e){
-      console.error('[n8n Bridge] Fehler:', e);
-      out.textContent = out.textContent + '\\n[Aktion fehlgeschlagen: ' + e.message + ']';
-      hint.textContent = 'Bereit';
+      out.textContent = out.textContent + '\\n[Aktion fehlgeschlagen]';
     }
     __bridgeBusy=false;
   }
@@ -990,106 +510,12 @@ const srv=http.createServer(async (req,res)=>{
     const q = QU ? await qdrantCheck(QU) : {ok:false,err:'unset'};
     noStore(res,'application/json'); return res.end(JSON.stringify({redis:{set:!!RU,ok:!!r.ok,raw:r.raw,err:r.err},qdrant:{set:!!QU,ok:!!q.ok,status:q.status,err:q.err}}));
   }
-  
-  // Qdrant Collections Info
-  if (req.method==='GET' && p==='/sira/diag/qdrant'){
-    if(!QDRANT_URL){
-      noStore(res,'application/json'); return res.end(JSON.stringify({ok:false,error:'QDRANT_URL not set'}));
-    }
-    try{
-      const r = await withTimeout(QDRANT_URL+'/collections',{},5000);
-      const js = await r.json();
-      const collections = js?.result?.collections || [];
-      
-      // Hole Details für jede Collection
-      const details = await Promise.all(collections.map(async (col) => {
-        try{
-          const info = await withTimeout(QDRANT_URL+'/collections/'+col.name,{},3000);
-          const infoJs = await info.json();
-          return {
-            name: col.name,
-            points: infoJs?.result?.points_count || 0,
-            vectors: infoJs?.result?.vectors_count || 0
-          };
-        }catch{
-          return {name: col.name, points: '?', vectors: '?'};
-        }
-      }));
-      
-      noStore(res,'application/json'); 
-      return res.end(JSON.stringify({ok:true, collections: details}));
-    }catch(e){
-      noStore(res,'application/json'); 
-      return res.end(JSON.stringify({ok:false, error: e.message}));
-    }
-  }
 
   // Memory
   if (req.method==='GET' && p==='/sira/memory'){ if(!checkToken(req,res)) return;
     noStore(res,'application/json'); return res.end(JSON.stringify({len:MEMORY.length,preview:MEMORY.slice(-800)})); }
   if (req.method==='POST' && p==='/sira/memory/add'){ if(!checkToken(req,res)) return;
     const b=await readBody(req); const note=(b&&(b.note||'')).toString(); if(note){ memAppend(note); }
-    noStore(res,'application/json'); return res.end(JSON.stringify({ok:true})); }
-  
-  // Facts Bulk Import
-  if (req.method==='POST' && p==='/sira/facts/import'){ if(!checkToken(req,res)) return;
-    const b=await readBody(req);
-    const text = (b&&b.text||'').toString();
-    if(!text){
-      noStore(res,'application/json'); 
-      return res.end(JSON.stringify({ok:false, error:'No text provided'}));
-    }
-    
-    try{
-      // Parse Markdown: Ignoriere Zeilen mit # und leere Zeilen
-      const lines = text.split('\n')
-        .map(l => l.trim())
-        .filter(l => l.length > 5 && !l.startsWith('#'));
-      
-      console.log('[Facts] Bulk-Import gestartet:', lines.length, 'Fakten');
-      
-      let imported = 0;
-      let failed = 0;
-      
-      for(const fact of lines){
-        const success = await qdrantStoreFact(fact);
-        if(success) imported++;
-        else failed++;
-      }
-      
-      console.log('[Facts] Bulk-Import abgeschlossen:', imported, 'erfolgreich,', failed, 'fehlgeschlagen');
-      noStore(res,'application/json'); 
-      return res.end(JSON.stringify({ok:true, imported, failed, total: lines.length}));
-    }catch(e){
-      console.log('[Facts] Bulk-Import Fehler:', e.message);
-      noStore(res,'application/json'); 
-      return res.end(JSON.stringify({ok:false, error: e.message}));
-    }
-  }
-  
-  // Realtime Memory Save (für WebRTC-Gespräche)
-  if (req.method==='POST' && p==='/sira/rt/memory/save'){ if(!checkToken(req,res)) return;
-    const b=await readBody(req); 
-    const userMsg=(b&&b.user||'').toString().trim();
-    const assistantMsg=(b&&b.assistant||'').toString().trim();
-    
-    console.log('[Realtime] Memory-Save aufgerufen - User:', userMsg.slice(0, 100));
-    
-    // Prüfe auf "Merke dir" Keywords im User-Text
-    if(userMsg){
-      console.log('[Facts] Prüfe Realtime User-Input:', userMsg.slice(0, 100));
-      const fact = extractFactFromText(userMsg);
-      if(fact){
-        console.log('[Facts] Erkannter Fakt (Realtime):', fact);
-        qdrantStoreFact(fact).then(stored => {
-          console.log('[Facts] Realtime-Speicherung erfolgreich:', stored);
-        });
-      } else {
-        console.log('[Facts] Kein Keyword in Realtime erkannt');
-      }
-      memAppend('User(Realtime): ' + userMsg);
-    }
-    if(assistantMsg) memAppend('Sira(Realtime): ' + assistantMsg);
     noStore(res,'application/json'); return res.end(JSON.stringify({ok:true})); }
 
   // n8n passthrough
