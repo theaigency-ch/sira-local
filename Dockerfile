@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-11';
-const SW_VER  = 'v18';
+const PWA_VER = '2025-10-15-12';
+const SW_VER  = 'v19';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -253,33 +253,36 @@ let memoryLoaded = false;
     console.log('[Redis] Memory-Initialisierung abgeschlossen');
   }
   
-  // Qdrant Collection erstellen (falls nicht vorhanden)
+  // Qdrant Collections erstellen (falls nicht vorhanden)
   if(QDRANT_URL){
-    try{
-      console.log('[Qdrant] Prüfe Collection:', QDRANT_COLLECTION);
-      const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION,{},5000);
-      if(r.status === 404){
-        console.log('[Qdrant] Collection nicht gefunden, erstelle...');
-        const create = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION,{
-          method:'PUT',
-          headers:{'content-type':'application/json'},
-          body: JSON.stringify({
-            vectors: {
-              size: 1536,
-              distance: 'Cosine'
-            }
-          })
-        },10000);
-        if(create.ok){
-          console.log('[Qdrant] Collection erstellt!');
-        }else{
-          console.log('[Qdrant] Collection-Erstellung fehlgeschlagen:', create.status);
+    const collections = [QDRANT_COLLECTION, QDRANT_FACTS_COLLECTION];
+    for(const col of collections){
+      try{
+        console.log('[Qdrant] Prüfe Collection:', col);
+        const r = await withTimeout(QDRANT_URL+'/collections/'+col,{},5000);
+        if(r.status === 404){
+          console.log('[Qdrant] Collection nicht gefunden, erstelle...');
+          const create = await withTimeout(QDRANT_URL+'/collections/'+col,{
+            method:'PUT',
+            headers:{'content-type':'application/json'},
+            body: JSON.stringify({
+              vectors: {
+                size: 1536,
+                distance: 'Cosine'
+              }
+            })
+          },10000);
+          if(create.ok){
+            console.log('[Qdrant] Collection', col, 'erstellt!');
+          }else{
+            console.log('[Qdrant] Collection-Erstellung fehlgeschlagen:', create.status);
+          }
+        }else if(r.ok){
+          console.log('[Qdrant] Collection', col, 'existiert bereits');
         }
-      }else if(r.ok){
-        console.log('[Qdrant] Collection existiert bereits');
+      }catch(e){
+        console.log('[Qdrant] Initialisierungs-Fehler für', col, ':', e.message);
       }
-    }catch(e){
-      console.log('[Qdrant] Initialisierungs-Fehler:', e.message);
     }
   }
 })();
@@ -313,10 +316,16 @@ async function askText(q){
   const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
   const shortMem = memTail(8000);
   
-  // Suche relevante alte Memories in Qdrant
+  // Suche relevante alte Memories + Fakten in Qdrant
   const oldMemories = await qdrantSearchMemory(userQ, 3);
+  const facts = await qdrantSearchFacts(userQ, 3);
+  
   const oldMemText = oldMemories.length > 0 
     ? '\n\n# Relevante frühere Gespräche (aus Archiv):\n' + oldMemories.map((m,i) => `[${i+1}] ${m.text.slice(0,500)}...`).join('\n\n')
+    : '';
+  
+  const factsText = facts.length > 0
+    ? '\n\n# Gespeicherte Fakten (Langzeitspeicher):\n' + facts.map((f,i) => `- ${f.text}`).join('\n')
     : '';
 
   const INSTR = INSTR_BASE +
@@ -325,6 +334,7 @@ async function askText(q){
     'Du DARFST dem Nutzer seine eigenen Kontaktangaben nennen (z. B. seine privaten/geschäftlichen E-Mails), wenn er danach fragt oder wenn sie für eine Aktion (E-Mail-Versand) nötig sind.\n' +
     '\n# Kürzlicher Gesprächskontext (Ausschnitt)\n' + (shortMem || '(leer)') +
     oldMemText +
+    factsText +
     '\n\nWenn externe/aktuelle Daten nötig sind, antworte EXAKT "__WEB__ <URL>" und NICHTS anderes.';
 
   try{
@@ -361,8 +371,15 @@ async function askText(q){
       return {ok:true,status:200,text:text2,raw:js2, web:{url: got.url, ok: got.ok}};
     }
 
+    // Prüfe auf "Merke dir" Keywords und speichere Fakt
+    const fact = extractFactFromText(userQ);
+    if(fact){
+      console.log('[Facts] Erkannter Fakt:', fact);
+      await qdrantStoreFact(fact);
+    }
+    
     if (MEM_AUTOSAVE && text1){ memAppend(`User: ${userQ}`); memAppend(`Sira: ${text1}`); }
-    return {ok:true,status:200,text:text1,raw:js1};
+    return {ok:true,status:200,text:text1,raw:js1,factStored:!!fact};
 
   }catch(e){
     return {ok:false,status:0,error:String(e&&e.message||e)}
@@ -394,11 +411,16 @@ async function createRealtimeEphemeral(){
     const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
     const shortMem = memTail(8000);
     
-    // Für Realtime: Lade Memory beim Session-Start (nicht bei jeder Frage)
-    // Nutze generischen Kontext für bessere Abdeckung
+    // Für Realtime: Lade Memory + Fakten beim Session-Start
     const oldMemories = await qdrantSearchMemory('Gesprächskontext Erinnerungen', 2);
+    const facts = await qdrantSearchFacts('Wichtige Fakten Informationen', 5);
+    
     const oldMemText = oldMemories.length > 0 
       ? '\n\n# Frühere Gespräche (Archiv):\n' + oldMemories.map(m => m.text.slice(0,400)).join('\n')
+      : '';
+    
+    const factsText = facts.length > 0
+      ? '\n\n# Gespeicherte Fakten (Langzeitspeicher):\n' + facts.map(f => `- ${f.text}`).join('\n')
       : '';
     
     const base = (process.env.SIRA_INSTRUCTIONS || 'Du bist Sira, eine hilfreiche, präzise, deutschsprachige Assistentin.');
@@ -408,6 +430,7 @@ async function createRealtimeEphemeral(){
       '\nDu DARFST dem Nutzer seine eigenen Kontaktangaben nennen (z. B. seine privaten/geschäftlichen E-Mails), wenn er danach fragt oder wenn sie für eine Aktion nötig sind.' +
       '\n\n# Kürzlicher Gesprächskontext (Ausschnitt)\n' + (shortMem || '(leer)') +
       oldMemText +
+      factsText +
       '\n\nStandort/Default: Schweiz (de-CH). Bevorzuge .ch-Quellen und CH-Perspektive, ausser explizit anders.' +
       '\nRealtime/v2: Bei E-Mail-Auftrag gib EXAKT "__N8N__ {\\"tool\\":\\"gmail.send\\",\\"to\\":\\"...\\",\\"subject\\":\\"...\\",\\"text\\":\\"...\\"}" und sonst NICHTS.';
 
@@ -454,6 +477,7 @@ async function forwardToN8N(json){
 /* ---------------------------- Diag (Redis/Qdrant) -------------------------- */
 const QDRANT_URL = (process.env.QDRANT_URL || '').replace(/\/+$/,'');
 const QDRANT_COLLECTION = 'sira_memory';
+const QDRANT_FACTS_COLLECTION = 'sira_facts';
 
 async function qdrantCheck(u){
   if(!u) return {ok:false,err:'unset'};
@@ -539,6 +563,86 @@ async function qdrantSearchMemory(query, limit=3){
     console.log('[Qdrant] Search Fehler:', e.message);
     return [];
   }
+}
+
+// Speichere Fakt in Qdrant Facts Collection
+async function qdrantStoreFact(text){
+  if(!QDRANT_URL || !text) return false;
+  try{
+    const embedding = await createEmbedding(text);
+    if(!embedding) return false;
+    
+    const timestamp = Date.now();
+    const id = 'fact_' + timestamp;
+    
+    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_FACTS_COLLECTION+'/points',{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({
+        points: [{
+          id: id,
+          vector: embedding,
+          payload: {text, timestamp, type: 'fact'}
+        }]
+      })
+    },10000);
+    
+    if(r.ok){
+      console.log('[Qdrant] Fakt gespeichert:', text.slice(0, 100));
+      return true;
+    }
+    return false;
+  }catch(e){
+    console.log('[Qdrant] Fakt-Speicher-Fehler:', e.message);
+    return false;
+  }
+}
+
+// Suche Fakten in Qdrant
+async function qdrantSearchFacts(query, limit=3){
+  if(!QDRANT_URL || !query) return [];
+  try{
+    const embedding = await createEmbedding(query);
+    if(!embedding) return [];
+    
+    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_FACTS_COLLECTION+'/points/search',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({
+        vector: embedding,
+        limit: limit,
+        with_payload: true
+      })
+    },10000);
+    if(!r.ok) return [];
+    const js = await r.json();
+    return (js?.result || []).map(item => ({
+      text: item.payload?.text || '',
+      score: item.score || 0
+    }));
+  }catch(e){
+    console.log('[Qdrant] Fakten-Such-Fehler:', e.message);
+    return [];
+  }
+}
+
+// Erkenne "Merke dir" Keywords und extrahiere Fakt
+function extractFactFromText(text){
+  const keywords = [
+    /merke?\s+dir:?\s*(.+)/i,
+    /speichere?:?\s+(.+)/i,
+    /speichere?\s+das:?\s*(.+)/i,
+    /lege?\s+das\s+in\s+langzeitspeicher:?\s*(.+)/i,
+    /lege?\s+in\s+langzeitspeicher:?\s*(.+)/i
+  ];
+  
+  for(const regex of keywords){
+    const match = text.match(regex);
+    if(match && match[1]){
+      return match[1].trim();
+    }
+  }
+  return null;
 }
 
 /* ------------------------------ Icon Handling ------------------------------ */
@@ -910,7 +1014,16 @@ const srv=http.createServer(async (req,res)=>{
     const b=await readBody(req); 
     const userMsg=(b&&b.user||'').toString().trim();
     const assistantMsg=(b&&b.assistant||'').toString().trim();
-    if(userMsg) memAppend('User(Realtime): ' + userMsg);
+    
+    // Prüfe auf "Merke dir" Keywords im User-Text
+    if(userMsg){
+      const fact = extractFactFromText(userMsg);
+      if(fact){
+        console.log('[Facts] Erkannter Fakt (Realtime):', fact);
+        qdrantStoreFact(fact); // async, ohne await (non-blocking)
+      }
+      memAppend('User(Realtime): ' + userMsg);
+    }
     if(assistantMsg) memAppend('Sira(Realtime): ' + assistantMsg);
     noStore(res,'application/json'); return res.end(JSON.stringify({ok:true})); }
 
