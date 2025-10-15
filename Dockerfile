@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-8';
-const SW_VER  = 'v15';
+const PWA_VER = '2025-10-15-9';
+const SW_VER  = 'v16';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -247,7 +247,7 @@ async function askText(q){
   const INSTR_BASE = (process.env.SIRA_INSTRUCTIONS || 'Antworte auf Deutsch, knapp und präzise.');
   const profile = await loadProfile();
   const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
-  const shortMem = memTail(1500);
+  const shortMem = memTail(8000);
 
   const INSTR = INSTR_BASE +
     '\n\n# Benutzerdaten\n' +
@@ -321,7 +321,7 @@ async function createRealtimeEphemeral(){
   try{
     const profile = await loadProfile();
     const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
-    const shortMem = memTail(1000);
+    const shortMem = memTail(8000);
     const base = (process.env.SIRA_INSTRUCTIONS || 'Du bist Sira, eine hilfreiche, präzise, deutschsprachige Assistentin.');
     const rtInstr =
       base +
