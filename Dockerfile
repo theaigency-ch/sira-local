@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-5';
-const SW_VER  = 'v12';
+const PWA_VER = '2025-10-15-6';
+const SW_VER  = 'v13';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -129,13 +129,28 @@ async function redisSet(key,val){ const r=await redisExec([resp('SET',key,val)])
 async function redisGet(key){
   const r=await redisExec([resp('GET',key)]);
   console.log('[Redis] GET', key, '- Raw response length:', r.raw?.length || 0);
-  const m=r.raw && r.raw.match(/^\$(-?\d+)\r\n/);
-  if(!m) { console.log('[Redis] GET', key, '- No match in response'); return null; }
-  const len=parseInt(m[1],10); 
-  if(len<0) { console.log('[Redis] GET', key, '- Key not found (len=-1)'); return null; }
-  const off=m[0].length; 
-  const val = r.raw.substring(off, off+len);
-  console.log('[Redis] GET', key, '- Found', len, 'bytes');
+  if(!r.raw) { console.log('[Redis] GET', key, '- No raw response'); return null; }
+  
+  // Finde die letzte $-Zeile (falls mehrere Antworten in der Response)
+  const lines = r.raw.split('\r\n');
+  let bulkIdx = -1;
+  for(let i = lines.length - 1; i >= 0; i--) {
+    if(lines[i].startsWith('$')) {
+      bulkIdx = i;
+      break;
+    }
+  }
+  
+  if(bulkIdx === -1) { 
+    console.log('[Redis] GET', key, '- No $ bulk string found. First 100 chars:', r.raw.substring(0, 100)); 
+    return null; 
+  }
+  
+  const len = parseInt(lines[bulkIdx].substring(1), 10);
+  if(len < 0) { console.log('[Redis] GET', key, '- Key not found (len=-1)'); return null; }
+  
+  const val = lines[bulkIdx + 1];
+  console.log('[Redis] GET', key, '- Found', len, 'bytes, actual:', val?.length || 0);
   return val;
 }
 async function redisPing(){ const r=await redisExec([resp('PING')]); return { ok: !!(r.raw && r.raw.includes('+PONG')), raw:r.raw, err:r.err }; }
