@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-9';
-const SW_VER  = 'v16';
+const PWA_VER = '2025-10-15-10';
+const SW_VER  = 'v17';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -156,6 +156,9 @@ async function redisGet(key){
 async function redisPing(){ const r=await redisExec([resp('PING')]); return { ok: !!(r.raw && r.raw.includes('+PONG')), raw:r.raw, err:r.err }; }
 
 const MEM_KEY='sira:memory';
+const MEM_ARCHIVE_THRESHOLD = 50000; // Archiviere wenn > 50k Zeichen
+const MEM_KEEP_RECENT = 8000; // Behalte letzte 8k in Redis
+
 async function memAppend(s){
   if(!s) return;
   
@@ -168,6 +171,12 @@ async function memAppend(s){
   if(!memoryLoaded) console.log('[Redis] WARNUNG: Memory noch nicht geladen, füge trotzdem hinzu');
   
   MEMORY += (MEMORY ? '\n' : '') + s;
+  
+  // Auto-Archivierung wenn zu groß
+  if(MEMORY.length > MEM_ARCHIVE_THRESHOLD){
+    await archiveOldMemory();
+  }
+  
   if (MEM_MAX && MEMORY.length > MEM_MAX){ MEMORY = MEMORY.slice(-MEM_MAX); }
   
   // Versuche Redis-Speicherung mit Retry
@@ -186,6 +195,31 @@ async function memAppend(s){
   }
   console.log('[Redis] Memory konnte nicht gespeichert werden nach 3 Versuchen');
 }
+
+// Archiviere alte Memories nach Qdrant
+async function archiveOldMemory(){
+  if(!QDRANT_URL || MEMORY.length <= MEM_KEEP_RECENT) return;
+  
+  try{
+    const toArchive = MEMORY.slice(0, -MEM_KEEP_RECENT);
+    const timestamp = Date.now();
+    const id = 'mem_' + timestamp;
+    
+    console.log('[Memory] Archiviere', toArchive.length, 'Zeichen nach Qdrant...');
+    const success = await qdrantStoreMemory(id, toArchive, timestamp);
+    
+    if(success){
+      MEMORY = MEMORY.slice(-MEM_KEEP_RECENT);
+      await redisSet(MEM_KEY, MEMORY);
+      console.log('[Memory] Archivierung erfolgreich! Behalte', MEMORY.length, 'Zeichen in Redis');
+    }else{
+      console.log('[Memory] Archivierung fehlgeschlagen');
+    }
+  }catch(e){
+    console.log('[Memory] Archivierungs-Fehler:', e.message);
+  }
+}
+
 function memTail(n=1500){ return MEMORY.slice(-n); }
 
 // Benutzerprofil aus Redis (+Fallback ENV)
@@ -200,7 +234,7 @@ async function loadProfile(){
   };
 }
 
-// Beim Start: Memory aus Redis einlesen (BLOCKING!)
+// Beim Start: Memory aus Redis einlesen + Qdrant Collection erstellen
 let memoryLoaded = false;
 (async()=>{ 
   try{ 
@@ -217,6 +251,36 @@ let memoryLoaded = false;
   } finally {
     memoryLoaded = true;
     console.log('[Redis] Memory-Initialisierung abgeschlossen');
+  }
+  
+  // Qdrant Collection erstellen (falls nicht vorhanden)
+  if(QDRANT_URL){
+    try{
+      console.log('[Qdrant] Prüfe Collection:', QDRANT_COLLECTION);
+      const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION,{},5000);
+      if(r.status === 404){
+        console.log('[Qdrant] Collection nicht gefunden, erstelle...');
+        const create = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION,{
+          method:'PUT',
+          headers:{'content-type':'application/json'},
+          body: JSON.stringify({
+            vectors: {
+              size: 1536,
+              distance: 'Cosine'
+            }
+          })
+        },10000);
+        if(create.ok){
+          console.log('[Qdrant] Collection erstellt!');
+        }else{
+          console.log('[Qdrant] Collection-Erstellung fehlgeschlagen:', create.status);
+        }
+      }else if(r.ok){
+        console.log('[Qdrant] Collection existiert bereits');
+      }
+    }catch(e){
+      console.log('[Qdrant] Initialisierungs-Fehler:', e.message);
+    }
   }
 })();
 
@@ -248,12 +312,19 @@ async function askText(q){
   const profile = await loadProfile();
   const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
   const shortMem = memTail(8000);
+  
+  // Suche relevante alte Memories in Qdrant
+  const oldMemories = await qdrantSearchMemory(userQ, 3);
+  const oldMemText = oldMemories.length > 0 
+    ? '\n\n# Relevante frühere Gespräche (aus Archiv):\n' + oldMemories.map((m,i) => `[${i+1}] ${m.text.slice(0,500)}...`).join('\n\n')
+    : '';
 
   const INSTR = INSTR_BASE +
     '\n\n# Benutzerdaten\n' +
     `Benutzerprofil: ${profileLine}\n` +
     'Du DARFST dem Nutzer seine eigenen Kontaktangaben nennen (z. B. seine privaten/geschäftlichen E-Mails), wenn er danach fragt oder wenn sie für eine Aktion (E-Mail-Versand) nötig sind.\n' +
     '\n# Kürzlicher Gesprächskontext (Ausschnitt)\n' + (shortMem || '(leer)') +
+    oldMemText +
     '\n\nWenn externe/aktuelle Daten nötig sind, antworte EXAKT "__WEB__ <URL>" und NICHTS anderes.';
 
   try{
@@ -322,12 +393,21 @@ async function createRealtimeEphemeral(){
     const profile = await loadProfile();
     const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
     const shortMem = memTail(8000);
+    
+    // Für Realtime: Lade Memory beim Session-Start (nicht bei jeder Frage)
+    // Nutze generischen Kontext für bessere Abdeckung
+    const oldMemories = await qdrantSearchMemory('Gesprächskontext Erinnerungen', 2);
+    const oldMemText = oldMemories.length > 0 
+      ? '\n\n# Frühere Gespräche (Archiv):\n' + oldMemories.map(m => m.text.slice(0,400)).join('\n')
+      : '';
+    
     const base = (process.env.SIRA_INSTRUCTIONS || 'Du bist Sira, eine hilfreiche, präzise, deutschsprachige Assistentin.');
     const rtInstr =
       base +
       '\n\n# Benutzerdaten\nBenutzerprofil: ' + profileLine +
       '\nDu DARFST dem Nutzer seine eigenen Kontaktangaben nennen (z. B. seine privaten/geschäftlichen E-Mails), wenn er danach fragt oder wenn sie für eine Aktion nötig sind.' +
       '\n\n# Kürzlicher Gesprächskontext (Ausschnitt)\n' + (shortMem || '(leer)') +
+      oldMemText +
       '\n\nStandort/Default: Schweiz (de-CH). Bevorzuge .ch-Quellen und CH-Perspektive, ausser explizit anders.' +
       '\nRealtime/v2: Bei E-Mail-Auftrag gib EXAKT "__N8N__ {\\"tool\\":\\"gmail.send\\",\\"to\\":\\"...\\",\\"subject\\":\\"...\\",\\"text\\":\\"...\\"}" und sonst NICHTS.';
 
@@ -372,6 +452,9 @@ async function forwardToN8N(json){
 }
 
 /* ---------------------------- Diag (Redis/Qdrant) -------------------------- */
+const QDRANT_URL = (process.env.QDRANT_URL || '').replace(/\/+$/,'');
+const QDRANT_COLLECTION = 'sira_memory';
+
 async function qdrantCheck(u){
   if(!u) return {ok:false,err:'unset'};
   try{ 
@@ -383,6 +466,78 @@ async function qdrantCheck(u){
   catch(e){ 
     console.log('[Qdrant] Connection failed:', e.message);
     return {ok:false,err:String(e&&e.message||e)} 
+  }
+}
+
+// Erstelle Embedding via OpenAI
+async function createEmbedding(text){
+  if(!KEY || !text) return null;
+  try{
+    const r = await withTimeout(BASE+'/v1/embeddings',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+KEY,'content-type':'application/json'},
+      body: JSON.stringify({model:'text-embedding-3-small', input: text.slice(0,8000)})
+    },10000);
+    if(!r.ok) return null;
+    const js = await r.json();
+    return js?.data?.[0]?.embedding || null;
+  }catch(e){
+    console.log('[Embedding] Fehler:', e.message);
+    return null;
+  }
+}
+
+// Speichere Memory-Chunk in Qdrant
+async function qdrantStoreMemory(id, text, timestamp){
+  if(!QDRANT_URL || !text) return false;
+  try{
+    const embedding = await createEmbedding(text);
+    if(!embedding) return false;
+    
+    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION+'/points',{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({
+        points: [{
+          id: id,
+          vector: embedding,
+          payload: {text, timestamp}
+        }]
+      })
+    },10000);
+    return r.ok;
+  }catch(e){
+    console.log('[Qdrant] Store Fehler:', e.message);
+    return false;
+  }
+}
+
+// Suche ähnliche Memories in Qdrant
+async function qdrantSearchMemory(query, limit=3){
+  if(!QDRANT_URL || !query) return [];
+  try{
+    const embedding = await createEmbedding(query);
+    if(!embedding) return [];
+    
+    const r = await withTimeout(QDRANT_URL+'/collections/'+QDRANT_COLLECTION+'/points/search',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({
+        vector: embedding,
+        limit: limit,
+        with_payload: true
+      })
+    },10000);
+    if(!r.ok) return [];
+    const js = await r.json();
+    return (js?.result || []).map(item => ({
+      text: item.payload?.text || '',
+      score: item.score || 0,
+      timestamp: item.payload?.timestamp || 0
+    }));
+  }catch(e){
+    console.log('[Qdrant] Search Fehler:', e.message);
+    return [];
   }
 }
 
