@@ -39,8 +39,8 @@ const MEM_MAX = Math.max(0, parseInt(process.env.SIRA_MEM_MAX||'0',10) || 0);
 let MEMORY = ''; // In-Process; wird (de)serialisiert über Redis
 
 // UI v2
-const PWA_VER = '2025-10-15-6';
-const SW_VER  = 'v13';
+const PWA_VER = '2025-10-15-7';
+const SW_VER  = 'v14';
 
 /* -------------------------- kleine Util-Funktionen ------------------------- */
 function pathOf(u){ try{ return new URL('http://x'+u).pathname }catch{ return (u||'').split('?')[0] } }
@@ -158,6 +158,15 @@ async function redisPing(){ const r=await redisExec([resp('PING')]); return { ok
 const MEM_KEY='sira:memory';
 async function memAppend(s){
   if(!s) return;
+  
+  // Warte bis Memory geladen ist (max 5 Sekunden)
+  let waited = 0;
+  while(!memoryLoaded && waited < 5000) {
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+  if(!memoryLoaded) console.log('[Redis] WARNUNG: Memory noch nicht geladen, füge trotzdem hinzu');
+  
   MEMORY += (MEMORY ? '\n' : '') + s;
   if (MEM_MAX && MEMORY.length > MEM_MAX){ MEMORY = MEMORY.slice(-MEM_MAX); }
   
@@ -191,7 +200,8 @@ async function loadProfile(){
   };
 }
 
-// Beim Start: Memory aus Redis einlesen (best effort)
+// Beim Start: Memory aus Redis einlesen (BLOCKING!)
+let memoryLoaded = false;
 (async()=>{ 
   try{ 
     console.log('[Redis] Lade Memory beim Start...');
@@ -204,7 +214,10 @@ async function loadProfile(){
     }
   }catch(e){ 
     console.log('[Redis] Fehler beim Laden des Memory:', e); 
-  } 
+  } finally {
+    memoryLoaded = true;
+    console.log('[Redis] Memory-Initialisierung abgeschlossen');
+  }
 })();
 
 /* ------------------------- Web Reader (Option A) --------------------------- */
