@@ -1,0 +1,31 @@
+# Umgebungsvariablen (enthalten API Keys!)
+.env
+*.env
+sira3.0.env
+
+# Docker Volumes
+data/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Backups
+*.backup
+*.bak
+*.old
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/

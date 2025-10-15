@@ -1,0 +1,57 @@
+version: '3.9'
+services:
+  siranet:
+    build: .
+    container_name: siranet
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    networks:
+      - sira_net
+    depends_on:
+      - redis-sira
+      - qdrant
+
+  redis-sira:
+    image: redis:7-alpine
+    container_name: redis-sira
+    command: redis-server --save 60 1 --loglevel warning --requirepass DohajERz0wlqQiIqzrMuJtVlKxxlSQA71aYYHeU1t2w
+    volumes:
+      - redis_sira_data:/data
+    restart: unless-stopped
+    networks:
+      - sira_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - sira_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+networks:
+  sira_net:
+    driver: bridge
+
+volumes:
+  redis_sira_data:
+  qdrant_data:
