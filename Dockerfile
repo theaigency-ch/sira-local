@@ -172,19 +172,30 @@ async function memAppend(s){
   
   MEMORY += (MEMORY ? '\n' : '') + s;
   
-  // Auto-Archivierung wenn zu groß
+  // Auto-Archivierung wenn zu groß (nur wenn Qdrant verfügbar)
   if(MEMORY.length > MEM_ARCHIVE_THRESHOLD){
+    console.log('[Memory] Schwellenwert erreicht:', MEMORY.length, 'Zeichen');
     await archiveOldMemory();
+    // Nach Archivierungsversuch: Wenn Memory immer noch zu groß ist, wurde Archivierung übersprungen
+    if(MEMORY.length > MEM_ARCHIVE_THRESHOLD){
+      console.log('[Memory] WARNUNG: Archivierung nicht erfolgt, Memory wächst weiter!');
+    }
   }
   
-  if (MEM_MAX && MEMORY.length > MEM_MAX){ MEMORY = MEMORY.slice(-MEM_MAX); }
+  // Notfall-Truncation nur wenn WIRKLICH zu groß (verhindert Datenverlust)
+  if (MEM_MAX && MEMORY.length > MEM_MAX){ 
+    console.log('[Memory] NOTFALL: Memory überschreitet Maximum (', MEMORY.length, '>', MEM_MAX, ') - truncate auf letzte', MEM_MAX, 'Zeichen');
+    MEMORY = MEMORY.slice(-MEM_MAX); 
+  }
   
   // Versuche Redis-Speicherung mit Retry
   for(let attempt=1; attempt<=3; attempt++){
     try{
       const success = await redisSet(MEM_KEY, MEMORY);
       if(success){
-        console.log('[Redis] Memory gespeichert (' + MEMORY.length + ' Zeichen)');
+        if(MEMORY.length > 10000){
+          console.log('[Redis] Memory gespeichert (' + MEMORY.length + ' Zeichen) - erwäge Archivierung');
+        }
         return;
       }
       console.log('[Redis] memAppend Versuch', attempt, 'fehlgeschlagen');
@@ -213,10 +224,13 @@ async function archiveOldMemory(){
       await redisSet(MEM_KEY, MEMORY);
       console.log('[Memory] Archivierung erfolgreich! Behalte', MEMORY.length, 'Zeichen in Redis');
     }else{
-      console.log('[Memory] Archivierung fehlgeschlagen');
+      console.log('[Memory] WARNUNG: Archivierung fehlgeschlagen - behalte alle Daten in Redis!');
+      console.log('[Memory] Prüfe Qdrant-Verbindung und Collections mit: curl http://localhost:6333/collections');
+      // WICHTIG: Daten NICHT löschen wenn Archivierung fehlschlägt!
     }
   }catch(e){
-    console.log('[Memory] Archivierungs-Fehler:', e.message);
+    console.log('[Memory] FEHLER bei Archivierung:', e.message);
+    console.log('[Memory] Daten bleiben in Redis erhalten um Datenverlust zu vermeiden');
   }
 }
 
@@ -253,37 +267,64 @@ let memoryLoaded = false;
     console.log('[Redis] Memory-Initialisierung abgeschlossen');
   }
   
-  // Qdrant Collections erstellen (falls nicht vorhanden)
+  // Qdrant Collections erstellen (falls nicht vorhanden) - mit Retry
   if(QDRANT_URL){
     const collections = [QDRANT_COLLECTION, QDRANT_FACTS_COLLECTION];
-    for(const col of collections){
+    
+    // Warte bis Qdrant bereit ist (max 30 Sekunden)
+    let qdrantReady = false;
+    for(let i=0; i<30; i++){
       try{
-        console.log('[Qdrant] Prüfe Collection:', col);
-        const r = await withTimeout(QDRANT_URL+'/collections/'+col,{},5000);
-        if(r.status === 404){
-          console.log('[Qdrant] Collection nicht gefunden, erstelle...');
-          const create = await withTimeout(QDRANT_URL+'/collections/'+col,{
-            method:'PUT',
-            headers:{'content-type':'application/json'},
-            body: JSON.stringify({
-              vectors: {
-                size: 1536,
-                distance: 'Cosine'
-              }
-            })
-          },10000);
-          if(create.ok){
-            console.log('[Qdrant] Collection', col, 'erstellt!');
-          }else{
-            console.log('[Qdrant] Collection-Erstellung fehlgeschlagen:', create.status);
-          }
-        }else if(r.ok){
-          console.log('[Qdrant] Collection', col, 'existiert bereits');
+        const health = await withTimeout(QDRANT_URL+'/readyz',{},3000);
+        if(health.ok){
+          console.log('[Qdrant] Verbindung hergestellt!');
+          qdrantReady = true;
+          break;
         }
       }catch(e){
-        console.log('[Qdrant] Initialisierungs-Fehler für', col, ':', e.message);
+        console.log('[Qdrant] Warte auf Verbindung... (Versuch', (i+1), '/30)');
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    
+    if(!qdrantReady){
+      console.log('[Qdrant] WARNUNG: Qdrant nicht erreichbar nach 30 Sekunden!');
+      console.log('[Qdrant] Memory-Archivierung wird nicht funktionieren!');
+    }else{
+      for(const col of collections){
+        try{
+          console.log('[Qdrant] Prüfe Collection:', col);
+          const r = await withTimeout(QDRANT_URL+'/collections/'+col,{},5000);
+          if(r.status === 404){
+            console.log('[Qdrant] Collection nicht gefunden, erstelle...');
+            const create = await withTimeout(QDRANT_URL+'/collections/'+col,{
+              method:'PUT',
+              headers:{'content-type':'application/json'},
+              body: JSON.stringify({
+                vectors: {
+                  size: 1536,
+                  distance: 'Cosine'
+                }
+              })
+            },10000);
+            if(create.ok){
+              console.log('[Qdrant] ✓ Collection', col, 'erfolgreich erstellt!');
+            }else{
+              const errText = await create.text();
+              console.log('[Qdrant] ✗ Collection-Erstellung fehlgeschlagen:', create.status, errText);
+            }
+          }else if(r.ok){
+            console.log('[Qdrant] ✓ Collection', col, 'existiert bereits');
+          }else{
+            console.log('[Qdrant] ✗ Unerwarteter Status:', r.status);
+          }
+        }catch(e){
+          console.log('[Qdrant] ✗ Initialisierungs-Fehler für', col, ':', e.message);
+        }
       }
     }
+  }else{
+    console.log('[Qdrant] QDRANT_URL nicht gesetzt - Memory-Archivierung deaktiviert');
   }
 })();
 
