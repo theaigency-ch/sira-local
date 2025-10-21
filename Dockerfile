@@ -156,8 +156,8 @@ async function redisGet(key){
 async function redisPing(){ const r=await redisExec([resp('PING')]); return { ok: !!(r.raw && r.raw.includes('+PONG')), raw:r.raw, err:r.err }; }
 
 const MEM_KEY='sira:memory';
-const MEM_ARCHIVE_THRESHOLD = 50000; // Archiviere wenn > 50k Zeichen
-const MEM_KEEP_RECENT = 8000; // Behalte letzte 8k in Redis
+const MEM_ARCHIVE_THRESHOLD = 30000; // Archiviere wenn > 30k Zeichen (früher archivieren!)
+const MEM_KEEP_RECENT = 10000; // Behalte letzte 10k in Redis (mehr behalten!)
 
 async function memAppend(s){
   if(!s) return;
@@ -357,9 +357,9 @@ async function askText(q){
   const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
   const shortMem = memTail(8000);
   
-  // Suche relevante alte Memories + Fakten in Qdrant
-  const oldMemories = await qdrantSearchMemory(userQ, 3);
-  const facts = await qdrantSearchFacts(userQ, 3);
+  // Suche relevante alte Memories + Fakten in Qdrant (MEHR RESULTS!)
+  const oldMemories = await qdrantSearchMemory(userQ, 10);  // 10 statt 3
+  const facts = await qdrantSearchFacts(userQ, 10);  // 10 statt 3
   
   const oldMemText = oldMemories.length > 0 
     ? '\n\n# Relevante frühere Gespräche (aus Archiv):\n' + oldMemories.map((m,i) => `[${i+1}] ${m.text.slice(0,500)}...`).join('\n\n')
@@ -456,9 +456,9 @@ async function createRealtimeEphemeral(){
     const profileLine = `Name=${profile.name||'-'} | Privat=${profile.email_private||'-'} | Arbeit=${profile.email_work||'-'}`;
     const shortMem = memTail(8000);
     
-    // Für Realtime: Lade Memory + Fakten beim Session-Start
-    const oldMemories = await qdrantSearchMemory('Gesprächskontext Erinnerungen', 2);
-    const facts = await qdrantSearchFacts('Wichtige Fakten Informationen', 5);
+    // Für Realtime: Lade Memory + Fakten beim Session-Start (MEHR für besseren Kontext!)
+    const oldMemories = await qdrantSearchMemory('Gesprächskontext Erinnerungen wichtige Informationen', 10);
+    const facts = await qdrantSearchFacts('Wichtige Fakten Informationen Präferenzen', 15);
     
     const oldMemText = oldMemories.length > 0 
       ? '\n\n# Frühere Gespräche (Archiv):\n' + oldMemories.map(m => m.text.slice(0,400)).join('\n')
