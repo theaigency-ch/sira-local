@@ -517,13 +517,13 @@ async function createRealtimeEphemeral(){
       {
         type: 'function',
         name: 'calendar_list',
-        description: 'Zeigt anstehende Termine und Events aus dem Google Calendar an. Nutze dies wenn der User nach seinen Terminen, Meetings oder Events fragt.',
+        description: 'Zeigt anstehende Termine und Events aus dem Google Calendar an. Nutze dies wenn der User nach seinen Terminen, Meetings oder Events fragt. WICHTIG: Keine summary, title oder description Parameter - nur Zeitraum-Filter!',
         parameters: {
           type: 'object',
           properties: {
-            start: {type: 'string', description: 'Startdatum (ISO 8601, optional)'},
-            end: {type: 'string', description: 'Enddatum (ISO 8601, optional)'},
-            maxResults: {type: 'number', description: 'Max. Anzahl Termine (optional, default: 10)'}
+            timeMin: {type: 'string', description: 'Startdatum/zeit (ISO 8601, z.B. 2025-10-22T00:00:00Z)'},
+            timeMax: {type: 'string', description: 'Enddatum/zeit (ISO 8601, z.B. 2025-10-23T23:59:59Z)'},
+            maxResults: {type: 'number', description: 'Max. Anzahl Termine (default: 10)'}
           }
         }
       },
