@@ -1,0 +1,236 @@
+{
+  "name": "📧 WF2: Multi-Channel Outreach + Approval",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "▶️ Start Outreach Campaign",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [240, 400],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "google_sheet_id",
+              "type": "string",
+              "value": "YOUR_SHEET_ID"
+            },
+            {
+              "id": "a2",
+              "name": "service_doc_id",
+              "type": "string",
+              "value": "YOUR_GOOGLE_DOC_ID"
+            },
+            {
+              "id": "a3",
+              "name": "brand_name",
+              "type": "string",
+              "value": "Your Company"
+            },
+            {
+              "id": "a4",
+              "name": "booking_link",
+              "type": "string",
+              "value": "https://calendly.com/your-link"
+            },
+            {
+              "id": "a5",
+              "name": "hubspot_api_key",
+              "type": "string",
+              "value": "YOUR_HUBSPOT_KEY"
+            }
+          ]
+        }
+      },
+      "id": "config-outreach",
+      "name": "⚙️ Outreach Config",
+      "type": "n8n-nodes-base.set",
+      "position": [480, 400],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "status",
+              "lookupValue": "Enriched"
+            },
+            {
+              "lookupColumn": "lead_tier",
+              "lookupValue": "Hot,Warm"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-qualified",
+      "name": "📋 Get Qualified Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [720, 400],
+      "typeVersion": 4.7
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-qualified",
+      "name": "🔁 Loop Qualified Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [960, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "={{ $('⚙️ Outreach Config').item.json.service_doc_id }}"
+      },
+      "id": "get-service-doc",
+      "name": "📄 Get Service Doc",
+      "type": "n8n-nodes-base.googleDocs",
+      "position": [1200, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Du bist ein Experte für professionelle Cold Emails im Schweizer B2B-Bereich.\n\n**Lead Info:**\nName: {{ $('🔁 Loop Qualified Leads').item.json.first_name }} {{ $('🔁 Loop Qualified Leads').item.json.last_name }}\nTitel: {{ $('🔁 Loop Qualified Leads').item.json.title }}\nFirma: {{ $('🔁 Loop Qualified Leads').item.json.organization_name }}\nOrt: {{ $('🔁 Loop Qualified Leads').item.json.organization_location }}\n\n**Intent Signals:**\n{{ $('🔁 Loop Qualified Leads').item.json.intent_signals }}\n\n**Personal Research:**\n{{ $('🔁 Loop Qualified Leads').item.json.personal_research }}\n\n**Qualifikation:**\n{{ $('🔁 Loop Qualified Leads').item.json.scoring_reasoning }}\n\n**Deine Services:**\n{{ $json.content }}\n\n**Brand:** {{ $('⚙️ Outreach Config').item.json.brand_name }}\n**Booking:** {{ $('⚙️ Outreach Config').item.json.booking_link }}\n\n---\n\n**Schreibe eine personalisierte E-Mail auf DEUTSCH (max 100 Wörter) für die DEUTSCHSCHWEIZ:**\n\n**WICHTIG - Schweizer Stil:**\n1. **Anrede:** \"Grüezi Herr/Frau [Name]\" (immer \"Sie\")\n2. **Ton:** Professionell, konservativ, nicht zu \"pushy\"\n3. **Zahlen:** CHF verwenden, Schweizer Format (1'000 statt 1.000)\n4. **Qualität:** Diskretion und Qualität betonen\n5. **Gruss:** \"Freundliche Grüsse\" oder \"Mit freundlichen Grüssen\"\n\n**Struktur:**\n1. **Opening:** Spezifisches Detail aus Research erwähnen\n2. **Value Prop:** Klares, messbares Ergebnis mit CHF-Zahlen\n3. **Social Proof:** Schweizer Referenz mit konkreten Zahlen\n4. **CTA:** Kurz und klar (15-Min-Gespräch)\n\n**Return JSON:**\n{\n  \"subject\": \"Kurze, professionelle Betreffzeile (2-5 Wörter)\",\n  \"email_body\": \"Vollständige E-Mail auf Deutsch mit Grüezi-Anrede und Freundliche Grüsse\",\n  \"personalization_hook\": \"Das spezifische Detail, das du erwähnt hast\",\n  \"value_metric\": \"Das messbare Ergebnis in CHF oder %\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "generate-email",
+      "name": "✍️ Generate Email (AI)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1440, 400],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Based on this lead's profile, create a LinkedIn connection request message:\n\n**Lead:**\n{{ $('🔁 Loop Qualified Leads').item.json.first_name }} {{ $('🔁 Loop Qualified Leads').item.json.last_name }}\n{{ $('🔁 Loop Qualified Leads').item.json.title }} at {{ $('🔁 Loop Qualified Leads').item.json.organization_name }}\n\n**Research:**\n{{ $('🔁 Loop Qualified Leads').item.json.personal_research }}\n\n**Rules:**\n- Max 300 characters (LinkedIn limit)\n- Reference something specific about them\n- No sales pitch\n- Genuine interest in connecting\n- Professional but friendly\n\n**Return JSON:**\n{\n  \"linkedin_message\": \"connection request text\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "generate-linkedin",
+      "name": "💼 Generate LinkedIn Message (AI)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1440, 600],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Outreach Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $('🔁 Loop Qualified Leads').item.json.email }}",
+            "email_subject": "={{ $('✍️ Generate Email (AI)').item.json.message.content.subject }}",
+            "email_body": "={{ $('✍️ Generate Email (AI)').item.json.message.content.email_body }}",
+            "linkedin_message": "={{ $('💼 Generate LinkedIn Message (AI)').item.json.message.content.linkedin_message }}",
+            "personalization_hook": "={{ $('✍️ Generate Email (AI)').item.json.message.content.personalization_hook }}",
+            "value_metric": "={{ $('✍️ Generate Email (AI)').item.json.message.content.value_metric }}",
+            "draft_created_at": "={{ $now.toISO() }}",
+            "status": "Draft Ready"
+          },
+          "matchingColumns": ["email"]
+        }
+      },
+      "id": "save-drafts",
+      "name": "💾 Save Drafts to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1680, 400],
+      "typeVersion": 4.6
+    },
+    {
+      "parameters": {
+        "content": "## ✅ APPROVAL CHECKPOINT\n\nWorkflow pauses here.\n\nGo to Google Sheet → Review drafts → Set status to \"Approved\" for leads you want to contact.\n\nThen run Workflow 2B (Send Approved) to send emails.",
+        "height": 300,
+        "width": 400,
+        "color": 4
+      },
+      "id": "approval-note",
+      "name": "⏸️ Manual Approval Required",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [1920, 300],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "▶️ Start Outreach Campaign": {
+      "main": [[{ "node": "⚙️ Outreach Config", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Outreach Config": {
+      "main": [[{ "node": "📋 Get Qualified Leads", "type": "main", "index": 0 }]]
+    },
+    "📋 Get Qualified Leads": {
+      "main": [[{ "node": "🔁 Loop Qualified Leads", "type": "main", "index": 0 }]]
+    },
+    "🔁 Loop Qualified Leads": {
+      "main": [
+        [],
+        [{ "node": "📄 Get Service Doc", "type": "main", "index": 0 }]
+      ]
+    },
+    "📄 Get Service Doc": {
+      "main": [[
+        { "node": "✍️ Generate Email (AI)", "type": "main", "index": 0 },
+        { "node": "💼 Generate LinkedIn Message (AI)", "type": "main", "index": 0 }
+      ]]
+    },
+    "✍️ Generate Email (AI)": {
+      "main": [[{ "node": "💾 Save Drafts to Sheet", "type": "main", "index": 0 }]]
+    },
+    "💼 Generate LinkedIn Message (AI)": {
+      "main": [[{ "node": "💾 Save Drafts to Sheet", "type": "main", "index": 0 }]]
+    },
+    "💾 Save Drafts to Sheet": {
+      "main": [[{ "node": "🔁 Loop Qualified Leads", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

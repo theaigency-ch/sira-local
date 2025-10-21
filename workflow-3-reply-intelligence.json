@@ -1,0 +1,445 @@
+{
+  "name": "🧠 WF3: Reply Intelligence + Follow-up Sequences",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-check",
+      "name": "⏰ Daily 10:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 400],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "google_sheet_id",
+              "type": "string",
+              "value": "YOUR_SHEET_ID"
+            },
+            {
+              "id": "a2",
+              "name": "hubspot_api_key",
+              "type": "string",
+              "value": "YOUR_HUBSPOT_KEY"
+            },
+            {
+              "id": "a3",
+              "name": "calendly_api_key",
+              "type": "string",
+              "value": "YOUR_CALENDLY_KEY"
+            }
+          ]
+        }
+      },
+      "id": "config-reply",
+      "name": "⚙️ Reply Config",
+      "type": "n8n-nodes-base.set",
+      "position": [480, 400],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "status",
+              "lookupValue": "Sent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-sent",
+      "name": "📬 Get Sent Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [720, 400],
+      "typeVersion": 4.7
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-sent",
+      "name": "🔁 Loop Sent Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [960, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "filters": {
+          "query": "=from:{{ $json.email }} to:me after:{{ $json.sent_at }}"
+        },
+        "options": {}
+      },
+      "id": "check-replies",
+      "name": "📨 Check for Replies",
+      "type": "n8n-nodes-base.gmail",
+      "position": [1200, 400],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-reply",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ]
+        }
+      },
+      "id": "has-reply",
+      "name": "❓ Has Reply?",
+      "type": "n8n-nodes-base.if",
+      "position": [1440, 400],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Analyze this email reply and classify the sentiment:\n\n**Original Email:**\nSubject: {{ $('🔁 Loop Sent Leads').item.json.email_subject }}\nBody: {{ $('🔁 Loop Sent Leads').item.json.email_body }}\n\n**Reply:**\n{{ $json.snippet }}\n\n**Classify as:**\n\n1. **POSITIVE** - Interested, wants to talk, asks questions, requests meeting\n   Examples: \"Let's schedule a call\", \"Tell me more\", \"Interested\", \"When can we talk?\"\n\n2. **NEUTRAL** - Acknowledges but not ready, asks to follow up later, needs more info\n   Examples: \"Not right now\", \"Check back in 3 months\", \"Send me more info\"\n\n3. **NEGATIVE** - Not interested, unsubscribe, wrong person, already using competitor\n   Examples: \"Not interested\", \"Remove me\", \"We're all set\", \"Already have a solution\"\n\n4. **OUT_OF_OFFICE** - Auto-reply, vacation, will respond later\n\n5. **MEETING_BOOKED** - They already booked a meeting via Calendly\n\n**Also detect:**\n- Objections (price, timing, not decision maker)\n- Questions asked\n- Next steps mentioned\n- Urgency level\n\n**Return JSON:**\n{\n  \"sentiment\": \"POSITIVE/NEUTRAL/NEGATIVE/OUT_OF_OFFICE/MEETING_BOOKED\",\n  \"confidence\": 0-100,\n  \"reasoning\": \"why you classified it this way\",\n  \"objections\": [\"list of objections\"],\n  \"questions\": [\"list of questions\"],\n  \"next_action\": \"what to do next\",\n  \"urgency\": \"High/Medium/Low\",\n  \"suggested_response\": \"draft response if needed\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "classify-reply",
+      "name": "🧠 Classify Reply (AI)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1680, 300],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "positive",
+              "leftValue": "={{ $json.message.content.sentiment }}",
+              "rightValue": "POSITIVE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "meeting",
+              "leftValue": "={{ $json.message.content.sentiment }}",
+              "rightValue": "MEETING_BOOKED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-sentiment",
+      "name": "🔀 Route by Sentiment",
+      "type": "n8n-nodes-base.switch",
+      "position": [1920, 300],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.hubapi.com/crm/v3/objects/tasks",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('⚙️ Reply Config').item.json.hubspot_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"hs_task_subject\": \"🔥 POSITIVE REPLY: {{ $('🔁 Loop Sent Leads').item.json.first_name }} {{ $('🔁 Loop Sent Leads').item.json.last_name }}\",\n    \"hs_task_body\": \"Reply Sentiment: {{ $('🧠 Classify Reply (AI)').item.json.message.content.sentiment }}\\n\\nReasoning: {{ $('🧠 Classify Reply (AI)').item.json.message.content.reasoning }}\\n\\nNext Action: {{ $('🧠 Classify Reply (AI)').item.json.message.content.next_action }}\\n\\nSuggested Response:\\n{{ $('🧠 Classify Reply (AI)').item.json.message.content.suggested_response }}\",\n    \"hs_task_status\": \"NOT_STARTED\",\n    \"hs_task_priority\": \"HIGH\",\n    \"hubspot_owner_id\": \"{{ $('🔁 Loop Sent Leads').item.json.hubspot_owner_id }}\"\n  }\n}"
+      },
+      "id": "create-task-positive",
+      "name": "✅ Create Task: Follow Up",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2160, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Reply Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $('🔁 Loop Sent Leads').item.json.email }}",
+            "status": "Replied - Positive",
+            "reply_sentiment": "={{ $('🧠 Classify Reply (AI)').item.json.message.content.sentiment }}",
+            "reply_at": "={{ $now.toISO() }}",
+            "next_action": "={{ $('🧠 Classify Reply (AI)').item.json.message.content.next_action }}",
+            "sequence_stopped": "Yes"
+          },
+          "matchingColumns": ["email"]
+        }
+      },
+      "id": "update-positive",
+      "name": "📝 Update: Positive Reply",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2400, 200],
+      "typeVersion": 4.6
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Reply Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $('🔁 Loop Sent Leads').item.json.email }}",
+            "status": "Not Interested",
+            "reply_sentiment": "NEGATIVE",
+            "reply_at": "={{ $now.toISO() }}",
+            "sequence_stopped": "Yes",
+            "blacklist": "Yes"
+          },
+          "matchingColumns": ["email"]
+        }
+      },
+      "id": "update-negative",
+      "name": "🚫 Update: Not Interested",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2160, 400],
+      "typeVersion": 4.6
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate days since sent\nconst sentAt = new Date($('🔁 Loop Sent Leads').item.json.sent_at);\nconst now = new Date();\nconst daysSince = Math.floor((now - sentAt) / (1000 * 60 * 60 * 24));\nconst currentDay = parseInt($('🔁 Loop Sent Leads').item.json.sequence_day || 0);\n\nreturn {\n  json: {\n    ...$input.item.json,\n    days_since_sent: daysSince,\n    current_sequence_day: currentDay,\n    should_send_followup: daysSince === 3 || daysSince === 7 || daysSince === 14\n  }\n};"
+      },
+      "id": "calc-followup",
+      "name": "📅 Calculate Follow-up Day",
+      "type": "n8n-nodes-base.code",
+      "position": [1680, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "should-send",
+              "leftValue": "={{ $json.should_send_followup }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "should-followup",
+      "name": "❓ Should Send Follow-up?",
+      "type": "n8n-nodes-base.if",
+      "position": [1920, 500],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Schreibe eine Follow-up E-Mail auf DEUTSCH für Tag {{ $json.days_since_sent }}.\n\n**Original E-Mail:**\nBetreff: {{ $('🔁 Loop Sent Leads').item.json.email_subject }}\nText: {{ $('🔁 Loop Sent Leads').item.json.email_body }}\n\n**Lead Info:**\nName: {{ $('🔁 Loop Sent Leads').item.json.first_name }}\nFirma: {{ $('🔁 Loop Sent Leads').item.json.organization_name }}\nValue Metric: {{ $('🔁 Loop Sent Leads').item.json.value_metric }}\n\n**Follow-up Strategie (Deutschschweiz):**\n\n**Tag 3:** Sanfte Erinnerung, Mehrwert hinzufügen (Fallstudie, Ressource)\n**Tag 7:** Anderer Blickwinkel, möglichen Einwand adressieren\n**Tag 14:** Break-up E-Mail, Höflich verabschieden\n\n**WICHTIG - Schweizer Stil:**\n- Immer \"Sie\" verwenden\n- Professionell & konservativ\n- Nicht zu \"pushy\"\n- CHF-Zahlen verwenden\n- Max 75 Wörter\n- Keine Druckausübung\n\n**Return JSON:**\n{\n  \"subject\": \"Re: {{ $('🔁 Loop Sent Leads').item.json.email_subject }}\",\n  \"body\": \"Follow-up E-Mail Text auf Deutsch\",\n  \"new_value_added\": \"Welcher neue Mehrwert wurde hinzugefügt\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "generate-followup",
+      "name": "✍️ Generate Follow-up (AI)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [2160, 600],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('🔁 Loop Sent Leads').item.json.email }}",
+        "subject": "={{ $json.message.content.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.message.content.body }}",
+        "options": {}
+      },
+      "id": "send-followup",
+      "name": "📧 Send Follow-up",
+      "type": "n8n-nodes-base.gmail",
+      "position": [2400, 600],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Reply Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $('🔁 Loop Sent Leads').item.json.email }}",
+            "sequence_day": "={{ $('📅 Calculate Follow-up Day').item.json.days_since_sent }}",
+            "last_followup_at": "={{ $now.toISO() }}",
+            "followup_count": "={{ parseInt($('🔁 Loop Sent Leads').item.json.followup_count || 0) + 1 }}"
+          },
+          "matchingColumns": ["email"]
+        }
+      },
+      "id": "update-followup",
+      "name": "📝 Update: Follow-up Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2640, 600],
+      "typeVersion": 4.6
+    }
+  ],
+  "connections": {
+    "⏰ Daily 10:00 AM": {
+      "main": [[{ "node": "⚙️ Reply Config", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Reply Config": {
+      "main": [[{ "node": "📬 Get Sent Leads", "type": "main", "index": 0 }]]
+    },
+    "📬 Get Sent Leads": {
+      "main": [[{ "node": "🔁 Loop Sent Leads", "type": "main", "index": 0 }]]
+    },
+    "🔁 Loop Sent Leads": {
+      "main": [
+        [],
+        [{ "node": "📨 Check for Replies", "type": "main", "index": 0 }]
+      ]
+    },
+    "📨 Check for Replies": {
+      "main": [[{ "node": "❓ Has Reply?", "type": "main", "index": 0 }]]
+    },
+    "❓ Has Reply?": {
+      "main": [
+        [{ "node": "🧠 Classify Reply (AI)", "type": "main", "index": 0 }],
+        [{ "node": "📅 Calculate Follow-up Day", "type": "main", "index": 0 }]
+      ]
+    },
+    "🧠 Classify Reply (AI)": {
+      "main": [[{ "node": "🔀 Route by Sentiment", "type": "main", "index": 0 }]]
+    },
+    "🔀 Route by Sentiment": {
+      "main": [
+        [{ "node": "✅ Create Task: Follow Up", "type": "main", "index": 0 }],
+        [{ "node": "🚫 Update: Not Interested", "type": "main", "index": 0 }]
+      ]
+    },
+    "✅ Create Task: Follow Up": {
+      "main": [[{ "node": "📝 Update: Positive Reply", "type": "main", "index": 0 }]]
+    },
+    "📝 Update: Positive Reply": {
+      "main": [[{ "node": "🔁 Loop Sent Leads", "type": "main", "index": 0 }]]
+    },
+    "🚫 Update: Not Interested": {
+      "main": [[{ "node": "🔁 Loop Sent Leads", "type": "main", "index": 0 }]]
+    },
+    "📅 Calculate Follow-up Day": {
+      "main": [[{ "node": "❓ Should Send Follow-up?", "type": "main", "index": 0 }]]
+    },
+    "❓ Should Send Follow-up?": {
+      "main": [
+        [{ "node": "✍️ Generate Follow-up (AI)", "type": "main", "index": 0 }],
+        [{ "node": "🔁 Loop Sent Leads", "type": "main", "index": 0 }]
+      ]
+    },
+    "✍️ Generate Follow-up (AI)": {
+      "main": [[{ "node": "📧 Send Follow-up", "type": "main", "index": 0 }]]
+    },
+    "📧 Send Follow-up": {
+      "main": [[{ "node": "📝 Update: Follow-up Sent", "type": "main", "index": 0 }]]
+    },
+    "📝 Update: Follow-up Sent": {
+      "main": [[{ "node": "🔁 Loop Sent Leads", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

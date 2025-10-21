@@ -1,0 +1,1863 @@
+{
+  "name": "Sira 3.0 Tools (Final)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sira3-tasks-create",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "sira3-tasks-create"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || $json;\nconst tool = b.tool || '';\n\nif (!tool) {\n  throw new Error('Missing required parameter: tool');\n}\n\nconst validTools = [\n  'gmail.send', 'gmail.reply', 'gmail.get',\n  'calendar.free_slots', 'calendar.create', 'calendar.update', 'calendar.list',\n  'contacts.find', 'contacts.upsert',\n  'web.search', 'web.fetch', 'perplexity.search',\n  'news.get', 'weather.get',\n  'notes.log', 'reminder.set'\n];\n\nif (!validTools.includes(tool)) {\n  throw new Error(`Unknown tool: ${tool}. Valid tools: ${validTools.join(', ')}`);\n}\n\nreturn [{json: b}];"
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "gmail.send",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "gmail.send"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "gmail.reply",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "gmail.reply"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "web.search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "web.search"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "web.fetch",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "web.fetch"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "calendar.free_slots",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "calendar.free_slots"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "calendar.create",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "calendar.create"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "calendar.update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "calendar.update"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "contacts.find",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "contacts.find"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "contacts.upsert",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "contacts.upsert"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "notes.log",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "notes.log"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "perplexity.search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "perplexity.search"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "news.get",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "news.get"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "weather.get",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "weather.get"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "gmail.get",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "gmail.get"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "calendar.list",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "calendar.list"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body?.tool || $json.tool }}",
+                    "rightValue": "reminder.set",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "reminder.set"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ true }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "fallback"
+            }
+          ]
+        }
+      },
+      "id": "switch",
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{to:b.to||'',subject:b.subject||'',text:b.text||'',html:b.html||'',cc:b.cc||'',bcc:b.bcc||''}}];"
+      },
+      "id": "prep-gmail-send",
+      "name": "Prep Gmail Send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html || $json.text }}",
+        "options": {
+          "ccList": "={{ $json.cc }}",
+          "bccList": "={{ $json.bcc }}",
+          "senderName": "the aigency"
+        }
+      },
+      "id": "gmail-send",
+      "name": "Gmail Send",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        600,
+        -200
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HhIq3H8VG57NsZOV",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true, id:$json.id, threadId:$json.threadId} }}"
+      },
+      "id": "resp-gmail-send",
+      "name": "Respond Gmail Send",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{thread_id:b.thread_id||'',text:b.text||'',html:b.html||''}}];"
+      },
+      "id": "prep-gmail-reply",
+      "name": "Prep Gmail Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "Re: {{ $json.subject }}",
+        "message": "={{ $json.html || $json.text }}",
+        "options": {
+          "senderName": "the aigency"
+        }
+      },
+      "id": "gmail-reply",
+      "name": "Gmail Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HhIq3H8VG57NsZOV",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true, id:$json.id} }}"
+      },
+      "id": "resp-gmail-reply",
+      "name": "Respond Gmail Reply",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{query:b.query||b.q||'',maxResults:b.maxResults||5}}];"
+      },
+      "id": "prep-web-search",
+      "name": "Prep Web Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "url": "https://serpapi.com/search.json",
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "hl",
+              "value": "de"
+            },
+            {
+              "name": "gl",
+              "value": "ch"
+            },
+            {
+              "name": "num",
+              "value": "={{ $json.maxResults }}"
+            }
+          ]
+        }
+      },
+      "id": "serpapi",
+      "name": "SerpAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        600,
+        200
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "sfA06G4FrIXGPzxU"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return[{json:{ok:true,results:($json.organic_results||[]).slice(0,5).map(r=>({title:r.title||'',url:r.link||'',snippet:r.snippet||''}))}}];"
+      },
+      "id": "shape-web-search",
+      "name": "Shape Web Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-web-search",
+      "name": "Respond Web Search",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{url:b.url||'',strip:b.strip!==false,limit:b.limit||8000}}];"
+      },
+      "id": "prep-web-fetch",
+      "name": "Prep Web Fetch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "http-fetch",
+      "name": "HTTP Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        600,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html=$json.data||'';const strip=$items('Prep Web Fetch')[0].json.strip;const limit=$items('Prep Web Fetch')[0].json.limit;const url=$items('Prep Web Fetch')[0].json.url;const titleMatch=html.match(/<title[^>]*>([^<]+)<\\/title>/i);const title=titleMatch?titleMatch[1].trim():'';let text=html;if(strip){text=text.replace(/<script[\\s\\S]*?<\\/script>/gi,'').replace(/<style[\\s\\S]*?<\\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim();}const content=text.slice(0,limit);return[{json:{ok:true,url,title,content,length:content.length,truncated:text.length>limit}}];"
+      },
+      "id": "shape-web-fetch",
+      "name": "Shape Web Fetch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-web-fetch",
+      "name": "Respond Web Fetch",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{date:b.date||new Date().toISOString().split('T')[0],duration:b.duration||60,calendarId:b.calendarId||'primary'}}];"
+      },
+      "id": "prep-cal-free",
+      "name": "Prep Cal Free",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{ $json.date }}T00:00:00Z",
+          "timeMax": "={{ $json.date }}T23:59:59Z"
+        }
+      },
+      "id": "cal-get",
+      "name": "Cal Get Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        600,
+        600
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "frnl8B9iRXQE9sT4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const duration=$items('Prep Cal Free')[0].json.duration;const date=$items('Prep Cal Free')[0].json.date;const events=$input.all().map(i=>i.json);const busy=[];for(const e of events){const start=new Date(e.start?.dateTime||e.start?.date);const end=new Date(e.end?.dateTime||e.end?.date);if(!isNaN(start)&&!isNaN(end)){busy.push([start,end]);}}busy.sort((a,b)=>a[0]-b[0]);const dayStart=new Date(date+'T08:00:00');const dayEnd=new Date(date+'T18:00:00');const minMs=duration*60000;const free=[];let cur=dayStart;for(const[start,end]of busy){if(start>cur&&(start-cur)>=minMs){free.push({start:cur.toISOString(),end:new Date(cur.getTime()+minMs).toISOString()});}if(end>cur)cur=end;}if(dayEnd>cur&&(dayEnd-cur)>=minMs){free.push({start:cur.toISOString(),end:new Date(cur.getTime()+minMs).toISOString()});}return[{json:{ok:true,slots:free.slice(0,10)}}];"
+      },
+      "id": "calc-free",
+      "name": "Calc Free",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-cal-free",
+      "name": "Respond Cal Free",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{summary:b.summary||b.title||'',start:b.start||'',end:b.end||'',description:b.description||'',location:b.location||'',calendarId:b.calendarId||'primary'}}];"
+      },
+      "id": "prep-cal-create",
+      "name": "Prep Cal Create",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "additionalFields": {
+          "description": "={{ $json.description }}",
+          "location": "={{ $json.location }}"
+        }
+      },
+      "id": "cal-create",
+      "name": "Cal Create",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        600,
+        800
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "frnl8B9iRXQE9sT4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true,id:$json.id,link:$json.htmlLink} }}"
+      },
+      "id": "resp-cal-create",
+      "name": "Respond Cal Create",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{event_id:b.event_id||'',summary:b.summary||'',start:b.start||'',end:b.end||'',description:b.description||'',location:b.location||'',calendarId:b.calendarId||'primary'}}];"
+      },
+      "id": "prep-cal-update",
+      "name": "Prep Cal Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "eventId": "={{ $json.event_id }}",
+        "updateFields": {
+          "summary": "={{ $json.summary }}",
+          "start": "={{ $json.start }}",
+          "end": "={{ $json.end }}",
+          "description": "={{ $json.description }}",
+          "location": "={{ $json.location }}"
+        }
+      },
+      "id": "cal-update",
+      "name": "Cal Update",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        600,
+        1000
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "frnl8B9iRXQE9sT4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true,id:$json.id} }}"
+      },
+      "id": "resp-cal-update",
+      "name": "Respond Cal Update",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{query:b.query||''}}];"
+      },
+      "id": "prep-contacts-find",
+      "name": "Prep Contacts Find",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 10
+      },
+      "id": "contacts-get",
+      "name": "Contacts Get",
+      "type": "n8n-nodes-base.googleContacts",
+      "typeVersion": 1,
+      "position": [
+        600,
+        1200
+      ],
+      "credentials": {
+        "googleContactsOAuth2Api": {
+          "id": "MRSzUPSzhq5RNdlR"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const q=($items('Prep Contacts Find')[0].json.query||'').toLowerCase();const rows=$input.all().map(i=>i.json);const best=rows.filter(r=>String(r.names?.[0]?.displayName||'').toLowerCase().includes(q)||String(r.emailAddresses?.[0]?.value||'').toLowerCase().includes(q)).slice(0,5).map(r=>({name:r.names?.[0]?.displayName||'',email:r.emailAddresses?.[0]?.value||'',phone:r.phoneNumbers?.[0]?.value||''}));return[{json:{ok:true,results:best}}];"
+      },
+      "id": "shape-contacts",
+      "name": "Shape Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-contacts-find",
+      "name": "Respond Contacts Find",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{name:b.name||'',email:b.email||'',phone:b.phone||''}}];"
+      },
+      "id": "prep-contacts-upsert",
+      "name": "Prep Contacts Upsert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "familyName": "={{ $json.name.split(' ').slice(-1)[0] }}",
+        "givenName": "={{ $json.name.split(' ').slice(0,-1).join(' ') }}",
+        "additionalFields": {
+          "emailsUi": {
+            "emailsValues": [
+              {
+                "type": "home",
+                "email": "={{ $json.email }}"
+              }
+            ]
+          },
+          "phoneUi": {
+            "phoneValues": [
+              {
+                "type": "mobile",
+                "number": "={{ $json.phone }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "contacts-create",
+      "name": "Contacts Create",
+      "type": "n8n-nodes-base.googleContacts",
+      "typeVersion": 1,
+      "position": [
+        600,
+        1400
+      ],
+      "credentials": {
+        "googleContactsOAuth2Api": {
+          "id": "MRSzUPSzhq5RNdlR"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true,id:$json.resourceName} }}"
+      },
+      "id": "resp-contacts-upsert",
+      "name": "Respond Contacts Upsert",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{note:b.note||'',category:b.category||'General',date:b.date||new Date().toISOString().split('T')[0]}}];"
+      },
+      "id": "prep-notes",
+      "name": "Prep Notes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1Bk55RGfEzfDeF5SxdTtnzZEKtA5jh_ZU1pRpeWS5O9c/edit",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1386834576,
+          "mode": "list"
+        },
+        "columns": {
+          "value": {
+            "date": "={{ $json.date }}",
+            "category": "={{ $json.category }}",
+            "note": "={{ $json.note }}"
+          }
+        }
+      },
+      "id": "sheets-append",
+      "name": "Sheets Append",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        600,
+        1600
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "5P04PKDMSlk6WLSY"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true,row:$json.row} }}"
+      },
+      "id": "resp-notes",
+      "name": "Respond Notes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;return[{json:{query:b.query||b.q||'',model:b.model||'sonar'}}];"
+      },
+      "id": "prep-perplexity",
+      "name": "Prep Perplexity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({model: $json.model, messages: [{role: 'user', content: $json.query}]}) }}",
+        "options": {}
+      },
+      "id": "perplexity-api",
+      "name": "Perplexity API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        600,
+        1800
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PERPLEXITY_CRED_ID",
+          "name": "Perplexity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$json;const answer=data.choices?.[0]?.message?.content||'';const citations=data.citations||[];return[{json:{ok:true,answer:answer,citations:citations,model:data.model||'sonar'}}];"
+      },
+      "id": "shape-perplexity",
+      "name": "Shape Perplexity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        1800
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-perplexity",
+      "name": "Respond Perplexity",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        1800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;const category=b.category||'schweiz';const limit=b.limit||5;let query='';if(category==='schweiz'){query='Aktuelle Nachrichten Schweiz heute, Top '+limit+' Schlagzeilen';}else if(category==='international'){query='Wichtigste internationale Nachrichten heute, Top '+limit;}else if(category==='tech'){query='Neueste Tech-News heute, Top '+limit;}else if(category==='business'){query='Aktuelle Wirtschaftsnachrichten heute, Top '+limit;}else{query='Aktuelle Nachrichten '+category+' heute, Top '+limit;}return[{json:{query:query,model:'sonar',category:category,limit:limit}}];"
+      },
+      "id": "prep-news",
+      "name": "Prep News",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({model: $json.model, messages: [{role: 'user', content: $json.query}]}) }}",
+        "options": {}
+      },
+      "id": "news-perplexity",
+      "name": "News Perplexity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        600,
+        2000
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PERPLEXITY_CRED_ID",
+          "name": "Perplexity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$json;const answer=data.choices?.[0]?.message?.content||'';const citations=data.citations||[];const category=$items('Prep News')[0].json.category;return[{json:{ok:true,category:category,summary:answer,sources:citations}}];"
+      },
+      "id": "shape-news",
+      "name": "Shape News",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-news",
+      "name": "Respond News",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;const location=b.location||'Z\u00fcrich';const days=b.days||3;return[{json:{location:location,days:days}}];"
+      },
+      "id": "prep-weather",
+      "name": "Prep Weather",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2200
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "url": "=https://api.openweathermap.org/data/2.5/forecast",
+        "options": {},
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "q",
+              "value": "={{ $json.location }},CH"
+            },
+            {
+              "name": "units",
+              "value": "metric"
+            },
+            {
+              "name": "lang",
+              "value": "de"
+            },
+            {
+              "name": "cnt",
+              "value": "={{ $json.days * 8 }}"
+            }
+          ]
+        }
+      },
+      "id": "openweather-api",
+      "name": "OpenWeather API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        600,
+        2200
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "OPENWEATHER_CRED_ID",
+          "name": "OpenWeather API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$json;const location=$items('Prep Weather')[0].json.location;const current=data.list?.[0];const forecast=[];const dailyData={};for(const item of(data.list||[])){const date=item.dt_txt.split(' ')[0];if(!dailyData[date]){dailyData[date]={date:date,temps:[],conditions:[],humidity:[],wind:[]};}dailyData[date].temps.push(item.main.temp);dailyData[date].conditions.push(item.weather[0].description);dailyData[date].humidity.push(item.main.humidity);dailyData[date].wind.push(item.wind.speed);}for(const date in dailyData){const day=dailyData[date];forecast.push({date:date,temp_min:Math.round(Math.min(...day.temps)),temp_max:Math.round(Math.max(...day.temps)),condition:day.conditions[0],humidity:Math.round(day.humidity.reduce((a,b)=>a+b)/day.humidity.length),wind:Math.round(day.wind.reduce((a,b)=>a+b)/day.wind.length)});}return[{json:{ok:true,location:location,current:{temp:Math.round(current?.main?.temp||0),feels_like:Math.round(current?.main?.feels_like||0),condition:current?.weather?.[0]?.description||'',humidity:current?.main?.humidity||0,wind:Math.round(current?.wind?.speed||0)},forecast:forecast.slice(0,3)}}];"
+      },
+      "id": "shape-weather",
+      "name": "Shape Weather",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        2200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-weather",
+      "name": "Respond Weather",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        2200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;const filter=b.filter||'is:unread';const limit=b.limit||10;return[{json:{filter:filter,limit:limit}}];"
+      },
+      "id": "prep-gmail-get",
+      "name": "Prep Gmail Get",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": "={{ $json.limit }}",
+        "simple": false,
+        "options": {
+          "q": "={{ $json.filter }}"
+        }
+      },
+      "id": "gmail-get",
+      "name": "Gmail Get",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        600,
+        2400
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HhIq3H8VG57NsZOV",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const emails=$input.all().map(i=>i.json);const results=emails.map(e=>({id:e.id,threadId:e.threadId,from:e.payload?.headers?.find(h=>h.name==='From')?.value||'',subject:e.payload?.headers?.find(h=>h.name==='Subject')?.value||'',snippet:e.snippet||'',date:e.payload?.headers?.find(h=>h.name==='Date')?.value||'',unread:e.labelIds?.includes('UNREAD')||false}));return[{json:{ok:true,count:results.length,emails:results}}];"
+      },
+      "id": "shape-gmail-get",
+      "name": "Shape Gmail Get",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-gmail-get",
+      "name": "Respond Gmail Get",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;let date=b.date||'today';const limit=b.limit||10;const calendarId=b.calendarId||'primary';let timeMin,timeMax;const now=new Date();if(date==='today'){timeMin=new Date(now.setHours(0,0,0,0)).toISOString();timeMax=new Date(now.setHours(23,59,59,999)).toISOString();}else if(date==='tomorrow'){const tomorrow=new Date(now);tomorrow.setDate(tomorrow.getDate()+1);timeMin=new Date(tomorrow.setHours(0,0,0,0)).toISOString();timeMax=new Date(tomorrow.setHours(23,59,59,999)).toISOString();}else if(date==='this_week'){timeMin=new Date(now.setHours(0,0,0,0)).toISOString();const weekEnd=new Date(now);weekEnd.setDate(weekEnd.getDate()+7);timeMax=weekEnd.toISOString();}else{timeMin=date+'T00:00:00Z';timeMax=date+'T23:59:59Z';}return[{json:{calendarId:calendarId,timeMin:timeMin,timeMax:timeMax,limit:limit}}];"
+      },
+      "id": "prep-cal-list",
+      "name": "Prep Cal List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": "={{ $json.limit }}",
+        "options": {
+          "timeMin": "={{ $json.timeMin }}",
+          "timeMax": "={{ $json.timeMax }}"
+        }
+      },
+      "id": "cal-list",
+      "name": "Cal List",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        600,
+        2600
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "frnl8B9iRXQE9sT4",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const events=$input.all().map(i=>i.json);const results=events.map(e=>({id:e.id,summary:e.summary||'',start:e.start?.dateTime||e.start?.date||'',end:e.end?.dateTime||e.end?.date||'',location:e.location||'',description:e.description||''}));return[{json:{ok:true,count:results.length,events:results}}];"
+      },
+      "id": "shape-cal-list",
+      "name": "Shape Cal List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        2600
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "resp-cal-list",
+      "name": "Respond Cal List",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        2600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;const title=b.title||b.task||'';const date=b.date||b.due||'';const notes=b.notes||b.description||'';return[{json:{title:title,due:date,notes:notes}}];"
+      },
+      "id": "prep-reminder",
+      "name": "Prep Reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "taskListId": {
+          "__rl": true,
+          "value": "default",
+          "mode": "list",
+          "cachedResultName": "My Tasks"
+        },
+        "title": "={{ $json.title }}",
+        "additionalFields": {
+          "due": "={{ $json.due }}",
+          "notes": "={{ $json.notes }}"
+        }
+      },
+      "id": "tasks-create",
+      "name": "Tasks Create",
+      "type": "n8n-nodes-base.googleTasks",
+      "typeVersion": 1,
+      "position": [
+        600,
+        2800
+      ],
+      "credentials": {
+        "googleTasksOAuth2Api": {
+          "id": "GOOGLE_TASKS_CRED_ID",
+          "name": "Google Tasks account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true,id:$json.id,title:$json.title,due:$json.due} }}"
+      },
+      "id": "resp-reminder",
+      "name": "Respond Reminder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        800,
+        2800
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": "={{ {ok: false, error: 'Unknown tool: ' + ($json.body?.tool || $json.tool || 'none'), validTools: ['gmail.send','gmail.reply','gmail.get','calendar.free_slots','calendar.create','calendar.update','calendar.list','contacts.find','contacts.upsert','web.search','web.fetch','perplexity.search','news.get','weather.get','notes.log','reminder.set']} }}"
+      },
+      "id": "resp-error",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        600,
+        -200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Prep Gmail Send"
+          }
+        ],
+        [
+          {
+            "node": "Prep Gmail Reply"
+          }
+        ],
+        [
+          {
+            "node": "Prep Web Search"
+          }
+        ],
+        [
+          {
+            "node": "Prep Web Fetch"
+          }
+        ],
+        [
+          {
+            "node": "Prep Cal Free"
+          }
+        ],
+        [
+          {
+            "node": "Prep Cal Create"
+          }
+        ],
+        [
+          {
+            "node": "Prep Cal Update"
+          }
+        ],
+        [
+          {
+            "node": "Prep Contacts Find"
+          }
+        ],
+        [
+          {
+            "node": "Prep Contacts Upsert"
+          }
+        ],
+        [
+          {
+            "node": "Prep Notes"
+          }
+        ],
+        [
+          {
+            "node": "Prep Perplexity"
+          }
+        ],
+        [
+          {
+            "node": "Prep News"
+          }
+        ],
+        [
+          {
+            "node": "Prep Weather"
+          }
+        ],
+        [
+          {
+            "node": "Prep Gmail Get"
+          }
+        ],
+        [
+          {
+            "node": "Prep Cal List"
+          }
+        ],
+        [
+          {
+            "node": "Prep Reminder"
+          }
+        ],
+        [
+          {
+            "node": "Error Response"
+          }
+        ]
+      ]
+    },
+    "Prep Gmail Send": {
+      "main": [
+        [
+          {
+            "node": "Gmail Send"
+          }
+        ]
+      ]
+    },
+    "Gmail Send": {
+      "main": [
+        [
+          {
+            "node": "Respond Gmail Send"
+          }
+        ]
+      ]
+    },
+    "Prep Gmail Reply": {
+      "main": [
+        [
+          {
+            "node": "Gmail Reply"
+          }
+        ]
+      ]
+    },
+    "Gmail Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond Gmail Reply"
+          }
+        ]
+      ]
+    },
+    "Prep Web Search": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI"
+          }
+        ]
+      ]
+    },
+    "SerpAPI": {
+      "main": [
+        [
+          {
+            "node": "Shape Web Search"
+          }
+        ]
+      ]
+    },
+    "Shape Web Search": {
+      "main": [
+        [
+          {
+            "node": "Respond Web Search"
+          }
+        ]
+      ]
+    },
+    "Prep Web Fetch": {
+      "main": [
+        [
+          {
+            "node": "HTTP Fetch"
+          }
+        ]
+      ]
+    },
+    "HTTP Fetch": {
+      "main": [
+        [
+          {
+            "node": "Shape Web Fetch"
+          }
+        ]
+      ]
+    },
+    "Shape Web Fetch": {
+      "main": [
+        [
+          {
+            "node": "Respond Web Fetch"
+          }
+        ]
+      ]
+    },
+    "Prep Cal Free": {
+      "main": [
+        [
+          {
+            "node": "Cal Get Events"
+          }
+        ]
+      ]
+    },
+    "Cal Get Events": {
+      "main": [
+        [
+          {
+            "node": "Calc Free"
+          }
+        ]
+      ]
+    },
+    "Calc Free": {
+      "main": [
+        [
+          {
+            "node": "Respond Cal Free"
+          }
+        ]
+      ]
+    },
+    "Prep Cal Create": {
+      "main": [
+        [
+          {
+            "node": "Cal Create"
+          }
+        ]
+      ]
+    },
+    "Cal Create": {
+      "main": [
+        [
+          {
+            "node": "Respond Cal Create"
+          }
+        ]
+      ]
+    },
+    "Prep Cal Update": {
+      "main": [
+        [
+          {
+            "node": "Cal Update"
+          }
+        ]
+      ]
+    },
+    "Cal Update": {
+      "main": [
+        [
+          {
+            "node": "Respond Cal Update"
+          }
+        ]
+      ]
+    },
+    "Prep Contacts Find": {
+      "main": [
+        [
+          {
+            "node": "Contacts Get"
+          }
+        ]
+      ]
+    },
+    "Contacts Get": {
+      "main": [
+        [
+          {
+            "node": "Shape Contacts"
+          }
+        ]
+      ]
+    },
+    "Shape Contacts": {
+      "main": [
+        [
+          {
+            "node": "Respond Contacts Find"
+          }
+        ]
+      ]
+    },
+    "Prep Contacts Upsert": {
+      "main": [
+        [
+          {
+            "node": "Contacts Create"
+          }
+        ]
+      ]
+    },
+    "Contacts Create": {
+      "main": [
+        [
+          {
+            "node": "Respond Contacts Upsert"
+          }
+        ]
+      ]
+    },
+    "Prep Notes": {
+      "main": [
+        [
+          {
+            "node": "Sheets Append"
+          }
+        ]
+      ]
+    },
+    "Sheets Append": {
+      "main": [
+        [
+          {
+            "node": "Respond Notes"
+          }
+        ]
+      ]
+    },
+    "Prep Perplexity": {
+      "main": [
+        [
+          {
+            "node": "Perplexity API"
+          }
+        ]
+      ]
+    },
+    "Perplexity API": {
+      "main": [
+        [
+          {
+            "node": "Shape Perplexity"
+          }
+        ]
+      ]
+    },
+    "Shape Perplexity": {
+      "main": [
+        [
+          {
+            "node": "Respond Perplexity"
+          }
+        ]
+      ]
+    },
+    "Prep News": {
+      "main": [
+        [
+          {
+            "node": "News Perplexity"
+          }
+        ]
+      ]
+    },
+    "News Perplexity": {
+      "main": [
+        [
+          {
+            "node": "Shape News"
+          }
+        ]
+      ]
+    },
+    "Shape News": {
+      "main": [
+        [
+          {
+            "node": "Respond News"
+          }
+        ]
+      ]
+    },
+    "Prep Weather": {
+      "main": [
+        [
+          {
+            "node": "OpenWeather API"
+          }
+        ]
+      ]
+    },
+    "OpenWeather API": {
+      "main": [
+        [
+          {
+            "node": "Shape Weather"
+          }
+        ]
+      ]
+    },
+    "Shape Weather": {
+      "main": [
+        [
+          {
+            "node": "Respond Weather"
+          }
+        ]
+      ]
+    },
+    "Prep Gmail Get": {
+      "main": [
+        [
+          {
+            "node": "Gmail Get"
+          }
+        ]
+      ]
+    },
+    "Gmail Get": {
+      "main": [
+        [
+          {
+            "node": "Shape Gmail Get"
+          }
+        ]
+      ]
+    },
+    "Shape Gmail Get": {
+      "main": [
+        [
+          {
+            "node": "Respond Gmail Get"
+          }
+        ]
+      ]
+    },
+    "Prep Cal List": {
+      "main": [
+        [
+          {
+            "node": "Cal List"
+          }
+        ]
+      ]
+    },
+    "Cal List": {
+      "main": [
+        [
+          {
+            "node": "Shape Cal List"
+          }
+        ]
+      ]
+    },
+    "Shape Cal List": {
+      "main": [
+        [
+          {
+            "node": "Respond Cal List"
+          }
+        ]
+      ]
+    },
+    "Prep Reminder": {
+      "main": [
+        [
+          {
+            "node": "Tasks Create"
+          }
+        ]
+      ]
+    },
+    "Tasks Create": {
+      "main": [
+        [
+          {
+            "node": "Respond Reminder"
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,260 @@
+{
+  "name": "🔍 WF1: Clay Leads Import (Stable)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clay-leads",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-clay",
+      "name": "🪝 Clay Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [240, 400],
+      "typeVersion": 2,
+      "webhookId": "clay-leads-import"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "google_sheet_id",
+              "type": "string",
+              "value": "YOUR_SHEET_ID"
+            },
+            {
+              "id": "a2",
+              "name": "hubspot_api_key",
+              "type": "string",
+              "value": "YOUR_HUBSPOT_KEY"
+            },
+            {
+              "id": "a3",
+              "name": "slack_webhook",
+              "type": "string",
+              "value": "YOUR_SLACK_WEBHOOK"
+            },
+            {
+              "id": "a4",
+              "name": "min_lead_score",
+              "type": "number",
+              "value": 60
+            }
+          ]
+        }
+      },
+      "id": "config",
+      "name": "⚙️ Config",
+      "type": "n8n-nodes-base.set",
+      "position": [480, 400],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicate & Normalize from Clay\nconst items = $input.all();\nconst seen = new Set();\nconst unique = [];\n\nitems.forEach(item => {\n  const email = item.json.email?.toLowerCase();\n  const key = email || `${item.json.first_name}_${item.json.last_name}_${item.json.company_name}`;\n  \n  if (!seen.has(key) && email) {\n    seen.add(key);\n    unique.push({\n      json: {\n        email: email,\n        first_name: item.json.first_name?.trim(),\n        last_name: item.json.last_name?.trim(),\n        title: item.json.title?.trim(),\n        organization_name: item.json.company_name?.trim(),\n        organization_website_url: item.json.company_website?.trim(),\n        organization_location: item.json.company_location?.trim() || 'Switzerland',\n        industry: item.json.industry?.trim(),\n        num_of_employees: item.json.company_size,\n        phone: item.json.phone?.replace(/[^\\d+]/g, ''),\n        linkedin_url: item.json.linkedin_url?.trim(),\n        organization_linkedin_url: item.json.company_linkedin_url?.trim(),\n        \n        // Clay enrichment data\n        intent_signals: item.json.intent_signals || '',\n        personalization_hook: item.json.personalization_hook || '',\n        lead_score: parseInt(item.json.lead_score) || 0,\n        lead_tier: item.json.lead_tier || 'Cold',\n        \n        // Metadata\n        dedupe_key: key,\n        discovered_at: new Date().toISOString(),\n        source: 'Clay + LinkedIn Sales Navigator'\n      }\n    });\n  }\n});\n\nreturn unique;"
+      },
+      "id": "dedupe",
+      "name": "🔄 Dedupe & Normalize",
+      "type": "n8n-nodes-base.code",
+      "position": [720, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Spam Gate: Filter freemail, role-based, blacklist\nconst items = $input.all();\nconst passed = [];\n\nconst freemailDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com', 'protonmail.com', 'gmx.de', 'gmx.ch', 'web.de', 't-online.de', 'bluewin.ch'];\nconst roleBasedPrefixes = ['info@', 'contact@', 'sales@', 'support@', 'admin@', 'hello@', 'team@', 'office@', 'noreply@', 'kontakt@'];\n\nitems.forEach(item => {\n  const email = item.json.email?.toLowerCase() || '';\n  const domain = email.split('@')[1];\n  \n  const isFreemail = freemailDomains.includes(domain);\n  const isRoleBased = roleBasedPrefixes.some(prefix => email.startsWith(prefix));\n  \n  if (!isFreemail && !isRoleBased && email) {\n    passed.push({\n      json: {\n        ...item.json,\n        spam_check_passed: true,\n        spam_check_reason: 'OK'\n      }\n    });\n  } else {\n    // Log rejected\n    console.log(`Rejected: ${email} - Freemail: ${isFreemail}, RoleBased: ${isRoleBased}`);\n  }\n});\n\nreturn passed;"
+      },
+      "id": "spam-gate",
+      "name": "🚫 Spam Gate",
+      "type": "n8n-nodes-base.code",
+      "position": [960, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": ["email"]
+        }
+      },
+      "id": "save-leads",
+      "name": "💾 Save to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1200, 400],
+      "typeVersion": 4.5
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.lead_score }}",
+              "rightValue": "={{ $('⚙️ Config').item.json.min_lead_score }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-qualified",
+      "name": "✅ Filter Qualified (≥60)",
+      "type": "n8n-nodes-base.if",
+      "position": [1440, 400],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('⚙️ Config').item.json.hubspot_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"name\": \"{{ $json.organization_name }}\",\n    \"domain\": \"{{ $json.organization_website_url }}\",\n    \"industry\": \"{{ $json.industry }}\",\n    \"numberofemployees\": \"{{ $json.num_of_employees }}\",\n    \"linkedin_company_page\": \"{{ $json.organization_linkedin_url }}\",\n    \"city\": \"{{ $json.organization_location }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "hubspot-company",
+      "name": "🏢 HubSpot: Upsert Company",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1680, 300],
+      "typeVersion": 4.2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('⚙️ Config').item.json.hubspot_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"email\": \"{{ $json.email }}\",\n    \"firstname\": \"{{ $json.first_name }}\",\n    \"lastname\": \"{{ $json.last_name }}\",\n    \"jobtitle\": \"{{ $json.title }}\",\n    \"phone\": \"{{ $json.phone }}\",\n    \"linkedin_url\": \"{{ $json.linkedin_url }}\",\n    \"hs_lead_status\": \"{{ $json.lead_tier }}\",\n    \"lead_score\": \"{{ $json.lead_score }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "hubspot-contact",
+      "name": "👤 HubSpot: Upsert Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1680, 500],
+      "typeVersion": 4.2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "hot",
+              "leftValue": "={{ $json.lead_tier }}",
+              "rightValue": "Hot",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-tier",
+      "name": "🔀 Route by Tier",
+      "type": "n8n-nodes-base.switch",
+      "position": [1920, 400],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Config').item.json.slack_webhook }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🔥 HOT LEAD ALERT!\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"🔥 Hot Lead: {{ $json.first_name }} {{ $json.last_name }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Company:*\\n{{ $json.organization_name }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Title:*\\n{{ $json.title }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Score:*\\n{{ $json.lead_score }}/100\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Email:*\\n{{ $json.email }}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Personalization Hook:*\\n{{ $json.personalization_hook }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Intent Signals:*\\n{{ $json.intent_signals }}\"\n      }\n    }\n  ]\n}"
+      },
+      "id": "slack-hot",
+      "name": "🔥 Slack: Hot Lead Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2160, 300],
+      "typeVersion": 4.2
+    }
+  ],
+  "connections": {
+    "🪝 Clay Webhook": {
+      "main": [[{ "node": "⚙️ Config", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Config": {
+      "main": [[{ "node": "🔄 Dedupe & Normalize", "type": "main", "index": 0 }]]
+    },
+    "🔄 Dedupe & Normalize": {
+      "main": [[{ "node": "🚫 Spam Gate", "type": "main", "index": 0 }]]
+    },
+    "🚫 Spam Gate": {
+      "main": [[{ "node": "💾 Save to Google Sheet", "type": "main", "index": 0 }]]
+    },
+    "💾 Save to Google Sheet": {
+      "main": [[{ "node": "✅ Filter Qualified (≥60)", "type": "main", "index": 0 }]]
+    },
+    "✅ Filter Qualified (≥60)": {
+      "main": [[
+        { "node": "🏢 HubSpot: Upsert Company", "type": "main", "index": 0 },
+        { "node": "👤 HubSpot: Upsert Contact", "type": "main", "index": 0 }
+      ]]
+    },
+    "🏢 HubSpot: Upsert Company": {
+      "main": [[{ "node": "🔀 Route by Tier", "type": "main", "index": 0 }]]
+    },
+    "👤 HubSpot: Upsert Contact": {
+      "main": [[{ "node": "🔀 Route by Tier", "type": "main", "index": 0 }]]
+    },
+    "🔀 Route by Tier": {
+      "main": [[{ "node": "🔥 Slack: Hot Lead Alert", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

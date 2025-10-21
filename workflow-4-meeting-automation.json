@@ -1,0 +1,286 @@
+{
+  "name": "📅 WF4: Meeting Automation (Stable)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-check-meetings",
+      "name": "⏰ Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 400],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "google_sheet_id",
+              "type": "string",
+              "value": "YOUR_SHEET_ID"
+            },
+            {
+              "id": "a2",
+              "name": "calendly_api_key",
+              "type": "string",
+              "value": "YOUR_CALENDLY_KEY"
+            },
+            {
+              "id": "a3",
+              "name": "hubspot_api_key",
+              "type": "string",
+              "value": "YOUR_HUBSPOT_KEY"
+            },
+            {
+              "id": "a4",
+              "name": "slack_webhook",
+              "type": "string",
+              "value": "YOUR_SLACK_WEBHOOK"
+            }
+          ]
+        }
+      },
+      "id": "config-meeting",
+      "name": "⚙️ Meeting Config",
+      "type": "n8n-nodes-base.set",
+      "position": [480, 400],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.calendly.com/scheduled_events",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.calendly_api_key }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "min_start_time",
+              "value": "={{ $now.minus({ hours: 6 }).toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "get-calendly-events",
+      "name": "📅 Get Calendly Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [720, 400],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-events",
+      "name": "🔁 Loop Events",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [960, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.uri }}/invitees",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('⚙️ Meeting Config').item.json.calendly_api_key }}"
+            }
+          ]
+        }
+      },
+      "id": "get-invitee",
+      "name": "👤 Get Invitee Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1200, 400],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Meeting Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email",
+              "lookupValue": "={{ $json.collection[0].email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "find-lead",
+      "name": "🔍 Find Lead in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1440, 400],
+      "typeVersion": 4.7
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Erstelle ein Meeting-Briefing auf DEUTSCH für dieses Gespräch:\n\n**Lead Info:**\nName: {{ $json.first_name }} {{ $json.last_name }}\nTitel: {{ $json.title }}\nFirma: {{ $json.organization_name }}\nBranche: {{ $json.industry }}\n\n**Research:**\nIntent Signals: {{ $json.intent_signals }}\nPersonalization Hook: {{ $json.personalization_hook }}\nLead Score: {{ $json.lead_score }}/100\n\n**Meeting Details:**\nTermin: {{ $('🔁 Loop Events').item.json.start_time }}\nDauer: {{ $('🔁 Loop Events').item.json.duration }} Minuten\n\n**Erstelle ein Briefing mit (auf Deutsch):**\n1. **Gesprächspunkte** - Worauf fokussieren basierend auf Pain Points\n2. **Fragen** - Discovery-Fragen spezifisch für ihre Situation\n3. **Value Props** - Welche Features/Benefits hervorheben\n4. **Mögliche Einwände** - Was könnte kritisch gesehen werden\n5. **Erfolgsmetriken** - Welche Ergebnisse versprechen (in CHF)\n6. **Nächste Schritte** - Empfohlene Follow-up Aktionen\n\n**WICHTIG - Schweizer Kontext:**\n- Alle Zahlen in CHF\n- Schweizer Referenzen erwähnen\n- Konservativer, professioneller Ton\n- Diskretion betonen\n\n**Return JSON:**\n{\n  \"talking_points\": [\"punkt1\", \"punkt2\", \"punkt3\"],\n  \"discovery_questions\": [\"frage1\", \"frage2\", \"frage3\"],\n  \"value_props\": [\"prop1\", \"prop2\"],\n  \"potential_objections\": [\"einwand1\", \"einwand2\"],\n  \"success_metrics\": \"text mit CHF-Zahlen\",\n  \"recommended_next_steps\": \"text\",\n  \"executive_summary\": \"2-3 Sätze Überblick auf Deutsch\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "generate-brief",
+      "name": "📋 Generate Meeting Brief (AI)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1680, 400],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Meeting Config').item.json.slack_webhook }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"📅 Meeting Booked!\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📅 New Meeting: {{ $('🔍 Find Lead in Sheet').item.json.first_name }} {{ $('🔍 Find Lead in Sheet').item.json.last_name }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Company:*\\n{{ $('🔍 Find Lead in Sheet').item.json.organization_name }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Title:*\\n{{ $('🔍 Find Lead in Sheet').item.json.title }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*When:*\\n{{ $('🔁 Loop Events').item.json.start_time }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Lead Score:*\\n{{ $('🔍 Find Lead in Sheet').item.json.lead_score }}/100\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Executive Summary:*\\n{{ $json.message.content.executive_summary }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Key Talking Points:*\\n• {{ $json.message.content.talking_points.join('\\n• ') }}\"\n      }\n    }\n  ]\n}"
+      },
+      "id": "slack-meeting",
+      "name": "💬 Slack: Meeting Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1920, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.hubapi.com/crm/v3/objects/contacts/{{ $('🔍 Find Lead in Sheet').item.json.hubspot_contact_id }}/notes",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('⚙️ Meeting Config').item.json.hubspot_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"hs_note_body\": \"📅 MEETING PREP BRIEF\\n\\n{{ JSON.stringify($('📋 Generate Meeting Brief (AI)').item.json.message.content, null, 2) }}\"\n  }\n}"
+      },
+      "id": "hubspot-brief",
+      "name": "📝 Add Brief to HubSpot",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1920, 500],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Meeting Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $('🔍 Find Lead in Sheet').item.json.email }}",
+            "status": "Meeting Booked",
+            "meeting_booked_at": "={{ $now.toISO() }}",
+            "meeting_scheduled_for": "={{ $('🔁 Loop Events').item.json.start_time }}",
+            "meeting_brief": "={{ JSON.stringify($('📋 Generate Meeting Brief (AI)').item.json.message.content) }}",
+            "sequence_stopped": "Yes"
+          },
+          "matchingColumns": ["email"]
+        }
+      },
+      "id": "update-meeting",
+      "name": "✅ Update: Meeting Booked",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2160, 400],
+      "typeVersion": 4.6
+    }
+  ],
+  "connections": {
+    "⏰ Every 6 Hours": {
+      "main": [[{ "node": "⚙️ Meeting Config", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Meeting Config": {
+      "main": [[{ "node": "📅 Get Calendly Events", "type": "main", "index": 0 }]]
+    },
+    "📅 Get Calendly Events": {
+      "main": [[{ "node": "🔁 Loop Events", "type": "main", "index": 0 }]]
+    },
+    "🔁 Loop Events": {
+      "main": [
+        [],
+        [{ "node": "👤 Get Invitee Details", "type": "main", "index": 0 }]
+      ]
+    },
+    "👤 Get Invitee Details": {
+      "main": [[{ "node": "🔍 Find Lead in Sheet", "type": "main", "index": 0 }]]
+    },
+    "🔍 Find Lead in Sheet": {
+      "main": [[{ "node": "📋 Generate Meeting Brief (AI)", "type": "main", "index": 0 }]]
+    },
+    "📋 Generate Meeting Brief (AI)": {
+      "main": [[
+        { "node": "💬 Slack: Meeting Alert", "type": "main", "index": 0 },
+        { "node": "📝 Add Brief to HubSpot", "type": "main", "index": 0 }
+      ]]
+    },
+    "💬 Slack: Meeting Alert": {
+      "main": [[{ "node": "✅ Update: Meeting Booked", "type": "main", "index": 0 }]]
+    },
+    "📝 Add Brief to HubSpot": {
+      "main": [[{ "node": "✅ Update: Meeting Booked", "type": "main", "index": 0 }]]
+    },
+    "✅ Update: Meeting Booked": {
+      "main": [[{ "node": "🔁 Loop Events", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

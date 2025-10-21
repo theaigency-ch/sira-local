@@ -1,0 +1,199 @@
+{
+  "name": "📊 WF5: Weekly Digest (Stable)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-weekly",
+      "name": "⏰ Monday 8:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 400],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "google_sheet_id",
+              "type": "string",
+              "value": "YOUR_SHEET_ID"
+            },
+            {
+              "id": "a2",
+              "name": "slack_webhook",
+              "type": "string",
+              "value": "YOUR_SLACK_WEBHOOK"
+            },
+            {
+              "id": "a3",
+              "name": "report_email",
+              "type": "string",
+              "value": "team@yourcompany.com"
+            }
+          ]
+        }
+      },
+      "id": "config-analytics",
+      "name": "⚙️ Analytics Config",
+      "type": "n8n-nodes-base.set",
+      "position": [480, 400],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "options": {}
+      },
+      "id": "get-all-leads",
+      "name": "📋 Get All Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [720, 400],
+      "typeVersion": 4.5
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate KPIs for last 7 days\nconst items = $input.all();\nconst sevenDaysAgo = new Date();\nsevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);\n\n// Filter last 7 days\nconst lastWeek = items.filter(item => {\n  const enrichedAt = new Date(item.json.enriched_at || item.json.discovered_at);\n  return enrichedAt >= sevenDaysAgo;\n});\n\n// Calculate metrics\nconst totalLeads = lastWeek.length;\nconst qualifiedLeads = lastWeek.filter(l => parseInt(l.json.lead_score) >= 60).length;\nconst hotLeads = lastWeek.filter(l => l.json.lead_tier === 'Hot').length;\nconst warmLeads = lastWeek.filter(l => l.json.lead_tier === 'Warm').length;\n\nconst emailsSent = lastWeek.filter(l => l.json.status === 'Sent' || l.json.sent_at).length;\nconst repliesReceived = lastWeek.filter(l => l.json.reply_at).length;\nconst positiveReplies = lastWeek.filter(l => l.json.reply_sentiment === 'POSITIVE').length;\nconst meetingsBooked = lastWeek.filter(l => l.json.status === 'Meeting Booked').length;\n\n// Calculate rates\nconst qualificationRate = totalLeads > 0 ? ((qualifiedLeads / totalLeads) * 100).toFixed(1) : 0;\nconst replyRate = emailsSent > 0 ? ((repliesReceived / emailsSent) * 100).toFixed(1) : 0;\nconst positiveReplyRate = repliesReceived > 0 ? ((positiveReplies / repliesReceived) * 100).toFixed(1) : 0;\nconst meetingRate = emailsSent > 0 ? ((meetingsBooked / emailsSent) * 100).toFixed(1) : 0;\n\n// Top performing leads\nconst topLeads = lastWeek\n  .filter(l => l.json.lead_score)\n  .sort((a, b) => parseInt(b.json.lead_score) - parseInt(a.json.lead_score))\n  .slice(0, 5)\n  .map(l => `${l.json.first_name} ${l.json.last_name} (${l.json.organization_name}) - Score: ${l.json.lead_score}`);\n\n// Industry breakdown\nconst industries = {};\nlastWeek.forEach(l => {\n  const ind = l.json.industry || 'Unknown';\n  industries[ind] = (industries[ind] || 0) + 1;\n});\n\nconst topIndustries = Object.entries(industries)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 3)\n  .map(([ind, count]) => `${ind}: ${count}`);\n\nreturn [{\n  json: {\n    period: 'Last 7 Days',\n    total_leads: totalLeads,\n    qualified_leads: qualifiedLeads,\n    hot_leads: hotLeads,\n    warm_leads: warmLeads,\n    emails_sent: emailsSent,\n    replies_received: repliesReceived,\n    positive_replies: positiveReplies,\n    meetings_booked: meetingsBooked,\n    qualification_rate: qualificationRate,\n    reply_rate: replyRate,\n    positive_reply_rate: positiveReplyRate,\n    meeting_rate: meetingRate,\n    top_leads: topLeads,\n    top_industries: topIndustries\n  }\n}];"
+      },
+      "id": "calculate-kpis",
+      "name": "📊 Calculate KPIs",
+      "type": "n8n-nodes-base.code",
+      "position": [960, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Erstelle eine Executive Summary auf DEUTSCH für die Performance des Sales Agents diese Woche:\n\n**KPIs:**\n{{ JSON.stringify($json, null, 2) }}\n\n**Erstelle einen Report mit (auf Deutsch):**\n\n1. **Executive Summary** (3-4 Sätze)\n   - Gesamtperformance\n   - Wichtigste Erfolge\n   - Verbesserungspotenzial\n\n2. **Wichtigste Erkenntnisse**\n   - Was funktioniert gut\n   - Was braucht Aufmerksamkeit\n   - Beobachtete Trends\n\n3. **Empfehlungen**\n   - Konkrete nächste Schritte\n   - Optimierungsmöglichkeiten\n\n4. **Highlights**\n   - Best performing Leads\n   - Best performing Branchen\n   - Conversion Funnel Analyse\n\n**WICHTIG - Schweizer Kontext:**\n- Alle Zahlen in CHF wenn relevant\n- Schweizer Schreibweise (1'000 statt 1.000)\n- Professioneller, konservativer Ton\n- Fokus auf Qualität statt Quantität\n\n**Ton:** Professionell aber verständlich, datengetrieben\n\n**Return JSON:**\n{\n  \"executive_summary\": \"text auf Deutsch\",\n  \"key_insights\": [\"erkenntnis1\", \"erkenntnis2\", \"erkenntnis3\"],\n  \"recommendations\": [\"empfehlung1\", \"empfehlung2\", \"empfehlung3\"],\n  \"highlights\": \"text auf Deutsch\",\n  \"overall_grade\": \"A/B/C/D/F\",\n  \"grade_reasoning\": \"Begründung auf Deutsch\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "generate-summary",
+      "name": "📝 Generate Summary (AI)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1200, 400],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('⚙️ Analytics Config').item.json.slack_webhook }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"📊 Weekly Sales Agent Report\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📊 Weekly Sales Agent Report - {{ $('📊 Calculate KPIs').item.json.period }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Overall Grade:* {{ $json.message.content.overall_grade }} - {{ $json.message.content.grade_reasoning }}\"\n      }\n    },\n    {\n      \"type\": \"divider\"\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Executive Summary*\\n{{ $json.message.content.executive_summary }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Leads Discovered*\\n{{ $('📊 Calculate KPIs').item.json.total_leads }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Qualified (≥60)*\\n{{ $('📊 Calculate KPIs').item.json.qualified_leads }} ({{ $('📊 Calculate KPIs').item.json.qualification_rate }}%)\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Emails Sent*\\n{{ $('📊 Calculate KPIs').item.json.emails_sent }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Reply Rate*\\n{{ $('📊 Calculate KPIs').item.json.reply_rate }}%\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Positive Replies*\\n{{ $('📊 Calculate KPIs').item.json.positive_replies }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Meetings Booked*\\n{{ $('📊 Calculate KPIs').item.json.meetings_booked }} ({{ $('📊 Calculate KPIs').item.json.meeting_rate }}%)\"\n        }\n      ]\n    },\n    {\n      \"type\": \"divider\"\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Key Insights*\\n• {{ $json.message.content.key_insights.join('\\n• ') }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Recommendations*\\n• {{ $json.message.content.recommendations.join('\\n• ') }}\"\n      }\n    }\n  ]\n}"
+      },
+      "id": "send-slack",
+      "name": "💬 Send to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1440, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('⚙️ Analytics Config').item.json.report_email }}",
+        "subject": "=📊 Weekly Sales Agent Report - Grade {{ $('📝 Generate Summary (AI)').item.json.message.content.overall_grade }}",
+        "emailType": "html",
+        "message": "=<h1>📊 Weekly Sales Agent Report</h1>\n\n<h2>Overall Performance: {{ $('📝 Generate Summary (AI)').item.json.message.content.overall_grade }}</h2>\n<p>{{ $('📝 Generate Summary (AI)').item.json.message.content.grade_reasoning }}</p>\n\n<hr>\n\n<h3>Executive Summary</h3>\n<p>{{ $('📝 Generate Summary (AI)').item.json.message.content.executive_summary }}</p>\n\n<hr>\n\n<h3>📈 Key Metrics</h3>\n<table border=\"1\" cellpadding=\"10\" style=\"border-collapse: collapse;\">\n  <tr>\n    <td><strong>Leads Discovered</strong></td>\n    <td>{{ $('📊 Calculate KPIs').item.json.total_leads }}</td>\n  </tr>\n  <tr>\n    <td><strong>Qualified Leads (≥60)</strong></td>\n    <td>{{ $('📊 Calculate KPIs').item.json.qualified_leads }} ({{ $('📊 Calculate KPIs').item.json.qualification_rate }}%)</td>\n  </tr>\n  <tr>\n    <td><strong>Hot Leads</strong></td>\n    <td>{{ $('📊 Calculate KPIs').item.json.hot_leads }}</td>\n  </tr>\n  <tr>\n    <td><strong>Warm Leads</strong></td>\n    <td>{{ $('📊 Calculate KPIs').item.json.warm_leads }}</td>\n  </tr>\n  <tr>\n    <td><strong>Emails Sent</strong></td>\n    <td>{{ $('📊 Calculate KPIs').item.json.emails_sent }}</td>\n  </tr>\n  <tr>\n    <td><strong>Replies Received</strong></td>\n    <td>{{ $('📊 Calculate KPIs').item.json.replies_received }} ({{ $('📊 Calculate KPIs').item.json.reply_rate }}%)</td>\n  </tr>\n  <tr>\n    <td><strong>Positive Replies</strong></td>\n    <td>{{ $('📊 Calculate KPIs').item.json.positive_replies }} ({{ $('📊 Calculate KPIs').item.json.positive_reply_rate }}%)</td>\n  </tr>\n  <tr style=\"background-color: #d4edda;\">\n    <td><strong>Meetings Booked</strong></td>\n    <td><strong>{{ $('📊 Calculate KPIs').item.json.meetings_booked }} ({{ $('📊 Calculate KPIs').item.json.meeting_rate }}%)</strong></td>\n  </tr>\n</table>\n\n<hr>\n\n<h3>🔑 Key Insights</h3>\n<ul>\n  {{ $('📝 Generate Summary (AI)').item.json.message.content.key_insights.map(i => `<li>${i}</li>`).join('') }}\n</ul>\n\n<hr>\n\n<h3>💡 Recommendations</h3>\n<ul>\n  {{ $('📝 Generate Summary (AI)').item.json.message.content.recommendations.map(r => `<li>${r}</li>`).join('') }}\n</ul>\n\n<hr>\n\n<h3>🏆 Highlights</h3>\n<p>{{ $('📝 Generate Summary (AI)').item.json.message.content.highlights }}</p>",
+        "options": {}
+      },
+      "id": "send-email-report",
+      "name": "📧 Email Report",
+      "type": "n8n-nodes-base.gmail",
+      "position": [1440, 500],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Analytics Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Weekly Reports"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "week_ending": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "total_leads": "={{ $('📊 Calculate KPIs').item.json.total_leads }}",
+            "qualified_leads": "={{ $('📊 Calculate KPIs').item.json.qualified_leads }}",
+            "qualification_rate": "={{ $('📊 Calculate KPIs').item.json.qualification_rate }}",
+            "emails_sent": "={{ $('📊 Calculate KPIs').item.json.emails_sent }}",
+            "replies_received": "={{ $('📊 Calculate KPIs').item.json.replies_received }}",
+            "reply_rate": "={{ $('📊 Calculate KPIs').item.json.reply_rate }}",
+            "meetings_booked": "={{ $('📊 Calculate KPIs').item.json.meetings_booked }}",
+            "meeting_rate": "={{ $('📊 Calculate KPIs').item.json.meeting_rate }}",
+            "overall_grade": "={{ $('📝 Generate Summary (AI)').item.json.message.content.overall_grade }}",
+            "executive_summary": "={{ $('📝 Generate Summary (AI)').item.json.message.content.executive_summary }}"
+          },
+          "matchingColumns": ["week_ending"]
+        }
+      },
+      "id": "save-report",
+      "name": "💾 Save Report to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1680, 400],
+      "typeVersion": 4.5
+    }
+  ],
+  "connections": {
+    "⏰ Monday 8:00 AM": {
+      "main": [[{ "node": "⚙️ Analytics Config", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Analytics Config": {
+      "main": [[{ "node": "📋 Get All Leads", "type": "main", "index": 0 }]]
+    },
+    "📋 Get All Leads": {
+      "main": [[{ "node": "📊 Calculate KPIs", "type": "main", "index": 0 }]]
+    },
+    "📊 Calculate KPIs": {
+      "main": [[{ "node": "📝 Generate Summary (AI)", "type": "main", "index": 0 }]]
+    },
+    "📝 Generate Summary (AI)": {
+      "main": [[
+        { "node": "💬 Send to Slack", "type": "main", "index": 0 },
+        { "node": "📧 Email Report", "type": "main", "index": 0 }
+      ]]
+    },
+    "💬 Send to Slack": {
+      "main": [[{ "node": "💾 Save Report to Sheet", "type": "main", "index": 0 }]]
+    },
+    "📧 Email Report": {
+      "main": [[{ "node": "💾 Save Report to Sheet", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

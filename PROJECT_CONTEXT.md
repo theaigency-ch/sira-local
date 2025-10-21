@@ -84,11 +84,24 @@ Wichtige Env-Vars (in `.env`):
 
 ## Letzte Änderungen
 
-### 16.10.2025 - Memory Loss Fix (HEUTE)
+### 19.10.2025 - Social Media Automation Projekt (HEUTE)
+- **Neues Projekt:** Social Media Automation System erstellt
+- **Location:** `/Users/macbookpro/Desktop/CascadeProjects/social-media-automation`
+- **Features:**
+  - 4 N8N Workflows (Content Generation, A/B Testing, Approval & Publishing, Analytics)
+  - 22 Dokumentations-Dateien (260 KB)
+  - A/B Testing mit 2 Varianten (Direct vs. Storytelling)
+  - Deutscher Sales Pitch
+  - Content Recycling Guide
+  - Security Checklist (20 Punkte)
+  - Analytics Guide (3 Ebenen)
+- **Status:** 100% Complete & Ready to Deploy ✓
+- **Dokumentation:** COMPLETION_REPORT.txt aktualisiert
+
+### 16.10.2025 - Memory Loss Fix
 - **Problem:** Daten wurden verloren wenn Qdrant-Archivierung fehlschlug
 - **Dateien:** Dockerfile, MEMORY_LOSS_FIX.md, verify-memory-fix.sh, PROJECT_CONTEXT.md
-- **Status:** Lokal getestet ✓, Container neu gebaut ✓, noch NICHT auf Coolify deployed
-- **Nächster Schritt:** Git commit + push zu GitHub → Coolify Auto-Deploy
+- **Status:** Deployed auf Coolify ✓
 
 ### 15.10.2025 - Bulk Facts Import (GESTERN)
 - **Commit:** `93d90e6` - "Feature: Bulk Facts Import Endpoint + sira-facts.md"
@@ -176,8 +189,8 @@ curl http://localhost:6333/collections
 - **Firma:** the aigency (KI-Agenten & Automatisierung)
 - **Sprache:** Deutsch (Schweiz)
 - **Zeitzone:** UTC+02:00
-- **Letzte Session:** 15.10.2025 (Bulk Facts Import, Memory-Tests)
-- **Aktuelle Session:** 16.10.2025 (Memory Loss Fix)
+- **Letzte Session:** 19.10.2025 (Social Media Automation Projekt)
+- **Aktuelle Session:** 21.10.2025 (Memory-System Testing & Verification)
 
 ## Was gestern (15.10.) gemacht wurde
 
@@ -197,32 +210,82 @@ curl http://localhost:6333/collections
    
 4. **Alles auf Coolify deployed** ✓
 
-## Was heute (16.10.) gemacht wurde
+## Was heute (19.10.) gemacht wurde
 
-1. **Memory Loss Problem identifiziert:**
-   - User berichtete: Nur letzte Aktion verfügbar, Rest verloren
-   - Root Cause: Qdrant Collections fehlten, Archivierung löschte Daten trotzdem
+1. **Neues Projekt: Social Media Automation System:**
+   - Komplett neues Projekt in `/social-media-automation`
+   - 4 N8N Workflows erstellt (67 KB)
+   - 22 Dokumentations-Dateien (260 KB)
    
-2. **Fixes implementiert:**
-   - Robuste Qdrant-Initialisierung (30s Retry)
-   - Sichere Archivierung (keine Datenlöschung bei Fehler)
-   - Verbesserte Fehlerbehandlung & Logging
+2. **A/B Testing Feature implementiert:**
+   - workflow-1b-ab-content-generation.json (22 KB)
+   - Variant A: Direct & Action-Oriented
+   - Variant B: Storytelling & Value-Driven
+   - Automatische Performance-Analyse
    
-3. **Dokumentation erstellt:**
-   - `MEMORY_LOSS_FIX.md` - Detaillierte Analyse
-   - `verify-memory-fix.sh` - Verifikations-Skript
-   - `PROJECT_CONTEXT.md` - Diese Datei (für AI-Assistenten)
+3. **8 Advanced Guides erstellt:**
+   - GOOGLE_SHEET_TEMPLATE.md
+   - EXAMPLE_POSTS.md (8 Beispiele)
+   - API_LIMITS_GUIDE.md
+   - ERROR_HANDLING.md
+   - SECURITY_CHECKLIST.md (20 Punkte)
+   - CONTENT_RECYCLING_GUIDE.md
+   - ANALYTICS_GUIDE.md (3 Ebenen)
+   - AB_TESTING_GUIDE.md
    
-4. **Status:** Lokal getestet ✓, noch NICHT deployed
+4. **Deutscher Sales Pitch:**
+   - SALES_PITCH.md neu auf Deutsch
+   - Schweizer Stil (CHF, "Sie")
+   - 8 Funktionen statt 12
+   - Gleiche Länge wie Sales Agent Pitch
+   
+5. **Alle Core-Dateien aktualisiert:**
+   - START_HERE.md (4 Workflows, 22 Dateien)
+   - INDEX.md (alle Dateien gelistet)
+   - README.md (A/B Testing, Content Recycling)
+   - PROJECT_SUMMARY.md (4 Workflows, 11 Features)
+   
+6. **Feature-Vergleich:**
+   - Social Media: A/B Testing ✅ (neu implementiert)
+   - Sales Agent: AI Lead Scoring ✅ (via Clay, bereits vorhanden)
+   - Entscheidung: Kein Duplikat in N8N nötig (Clay macht es besser)
+
+## Was heute (21.10.) gemacht wurde
+
+1. **Memory-System vollständig getestet:**
+   - ✅ Langzeitgedächtnis (Qdrant Facts) funktioniert perfekt
+   - ✅ Realtime Memory funktioniert perfekt
+   - ✅ "Merke dir" Keywords werden erkannt (Text + Voice)
+   - ✅ 51 Fakten in Qdrant gespeichert (49 Business + 2 persönliche)
+   
+2. **n8n Tool-Layer getestet:**
+   - ✅ gmail.send funktioniert (200 OK)
+   - ⏳ Andere Tools noch zu testen (calendar, contacts, web)
+   - ⚠️ n8n zeigt "Node does not have any credentials set"
+   
+3. **MCP Status geklärt:**
+   - ❌ MCP ist NICHT implementiert (nur in IDE)
+   - ✅ Alle Tools laufen über n8n Webhooks (Sira3-tasks-create)
+   
+4. **Dokumentation erstellt:**
+   - MEMORY_TEST_REPORT.md mit allen Test-Ergebnissen
+   - PROJECT_CONTEXT.md aktualisiert
 
 ## TODO / Offene Punkte
 
-- [ ] **JETZT:** Memory Loss Fix committen & pushen
-- [ ] Coolify Auto-Deploy verifizieren
-- [ ] Qdrant Collections auf VPS prüfen/erstellen (falls nötig)
-- [ ] Nach Deployment: Verlorene Fakten neu eingeben
+### Sira Voice Assistant (PRIORITÄT):
+- [ ] **n8n Credentials in UI prüfen** (localhost:5678)
+- [ ] Andere n8n Tools testen (calendar, contacts, web)
+- [ ] Facts auf VPS importieren (49 Business-Fakten)
+- [ ] Realtime Memory auf VPS testen
+- [ ] Health-Checks optimieren (Qdrant, n8n)
 - [ ] Backup-Strategie für Redis implementieren
 - [ ] Monitoring einrichten
+
+### Social Media Automation:
+- [ ] v1.5: Content Recycling Workflow automatisieren
+- [ ] v1.5: Video/Podcast Transcription
+- [ ] v2.0: Engagement Tracking (automatisch)
 
 ---
 

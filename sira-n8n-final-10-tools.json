@@ -1,0 +1,23 @@
+{
+  "name": "Sira 3.0 Tools (Final - 10 Tools)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sira3-tasks-create",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-main",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "sira3-tasks-create"
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "id": "sira-final-10"
+}

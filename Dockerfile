@@ -28,6 +28,13 @@ const WORK  = process.env.SIRA_WORK_EMAIL    || '';
 
 const APP_NAME = process.env.SIRA_APP_NAME || 'Sira-Voice';
 const ICON_URL = process.env.SIRA_ICON_URL || '';
+
+// Twilio Configuration
+const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER || '';
+const PHONE_ENABLED = process.env.SIRA_PHONE_ENABLED === 'true';
+const PHONE_OWNER = process.env.SIRA_PHONE_OWNER_NAME || 'Peter Baka';
 const ICON_B64 = process.env.SIRA_ICON_B64 || ''; // optional Base64
 const TOKEN_REQ = (process.env.SIRA_TOKEN || '').trim();
 
@@ -509,6 +516,19 @@ async function createRealtimeEphemeral(){
           },
           required: ['summary', 'start', 'end']
         }
+      },
+      {
+        type: 'function',
+        name: 'phone_call',
+        description: 'Ruft eine Telefonnummer an',
+        parameters: {
+          type: 'object',
+          properties: {
+            contact: {type: 'string', description: 'Name oder Telefonnummer'},
+            message: {type: 'string', description: 'Was soll Sira sagen?'}
+          },
+          required: ['contact', 'message']
+        }
       }
     ];
 
@@ -551,6 +571,191 @@ async function forwardToN8N(json){
   }catch(e){ 
     console.log('[n8n] Fehler:', e);
     return {status:502, ctype:'application/json', body: JSON.stringify({ok:false,error:'n8n unreachable'})}; 
+  }
+}
+
+/* ------------------------------ Twilio Integration ------------------------- */
+async function twilioCall(to, message){
+  if(!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_PHONE){
+    return {ok:false, error:'Twilio not configured'};
+  }
+  
+  const auth = Buffer.from(TWILIO_SID + ':' + TWILIO_TOKEN).toString('base64');
+  const url = \`https://api.twilio.com/2010-04-01/Accounts/\${TWILIO_SID}/Calls.json\`;
+  
+  try{
+    console.log('[Twilio] Rufe an:', to);
+    const twiml = \`<Response><Say voice="Polly.Vicki" language="de-DE">\${message}</Say></Response>\`;
+    
+    const params = new URLSearchParams({
+      To: to,
+      From: TWILIO_PHONE,
+      Twiml: twiml
+    });
+    
+    const r = await withTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + auth,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString()
+    }, 15000);
+    
+    const result = await r.json();
+    console.log('[Twilio] Antwort:', r.status, result.sid);
+    
+    return {
+      ok: r.ok, 
+      sid: result.sid, 
+      status: result.status,
+      to: result.to,
+      from: result.from
+    };
+  }catch(e){
+    console.log('[Twilio] Fehler:', e.message);
+    return {ok:false, error: e.message};
+  }
+}
+
+async function twilioCallWithRealtime(to, contactName){
+  if(!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_PHONE){
+    return {ok:false, error:'Twilio not configured'};
+  }
+  
+  // Erstelle Realtime Session für Telefonie
+  const rtSession = await createPhoneRealtimeSession(contactName || 'Unbekannt', to);
+  if(!rtSession.ok){
+    return {ok:false, error: 'Failed to create Realtime session'};
+  }
+  
+  const auth = Buffer.from(TWILIO_SID + ':' + TWILIO_TOKEN).toString('base64');
+  const url = \`https://api.twilio.com/2010-04-01/Accounts/\${TWILIO_SID}/Calls.json\`;
+  
+  try{
+    console.log('[Twilio] Rufe an mit Realtime:', to);
+    
+    // TwiML mit Connect zu Realtime
+    const twiml = \`<Response>
+      <Say voice="Polly.Vicki" language="de-DE">Hallo, hier ist Sira.</Say>
+      <Connect>
+        <Stream url="wss://sira.theaigency.ch/sira/phone/stream/\${rtSession.sessionId}" />
+      </Connect>
+    </Response>\`;
+    
+    const params = new URLSearchParams({
+      To: to,
+      From: TWILIO_PHONE,
+      Twiml: twiml
+    });
+    
+    const r = await withTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + auth,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString()
+    }, 15000);
+    
+    const result = await r.json();
+    console.log('[Twilio] Anruf gestartet:', result.sid);
+    
+    return {
+      ok: r.ok, 
+      sid: result.sid,
+      sessionId: rtSession.sessionId
+    };
+  }catch(e){
+    console.log('[Twilio] Fehler:', e.message);
+    return {ok:false, error: e.message};
+  }
+}
+
+async function createPhoneRealtimeSession(callerName, callerNumber){
+  if (!KEY) return {ok:false, error:'missing OPENAI_API_KEY'};
+  
+  try{
+    const profile = await loadProfile();
+    const shortMem = memTail(8000);
+    
+    const phoneInstructions = \`Du bist Sira, die persönliche Assistentin von \${PHONE_OWNER}.
+
+AKTUELLER ANRUF:
+- Anrufer: \${callerName}
+- Nummer: \${callerNumber}
+
+DEINE AUFGABEN:
+1. Freundlich und professionell sein
+2. Fragen worum es geht
+3. Je nach Anliegen:
+   - Termin vereinbaren (calendar_create)
+   - Nachricht entgegennehmen (notes_log)
+   - Informationen geben
+
+KONTEXT:
+\${shortMem}
+
+Sei kurz und präzise - das ist ein Telefongespräch!\`;
+
+    const tools = [
+      {
+        type: 'function',
+        name: 'calendar_create',
+        description: 'Erstellt einen Termin im Kalender',
+        parameters: {
+          type: 'object',
+          properties: {
+            summary: {type: 'string', description: 'Titel des Termins'},
+            start: {type: 'string', description: 'Startzeit (ISO 8601)'},
+            end: {type: 'string', description: 'Endzeit (ISO 8601)'}
+          },
+          required: ['summary', 'start', 'end']
+        }
+      },
+      {
+        type: 'function',
+        name: 'notes_log',
+        description: 'Speichert eine Nachricht',
+        parameters: {
+          type: 'object',
+          properties: {
+            note: {type: 'string', description: 'Die Nachricht'},
+            category: {type: 'string', description: 'Kategorie (optional)'}
+          },
+          required: ['note']
+        }
+      }
+    ];
+
+    const r = await withTimeout(BASE+'/v1/realtime/sessions',{
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+KEY,
+        'content-type':'application/json',
+        'OpenAI-Beta':'realtime=v1'
+      },
+      body: JSON.stringify({
+        model: MODEL_RT,
+        voice: VOICE_RT,
+        modalities:['audio','text'],
+        instructions: phoneInstructions,
+        tools: tools,
+        tool_choice: 'auto'
+      })
+    },10000);
+    
+    const session = await r.json();
+    console.log('[Phone] Realtime Session erstellt:', session.id);
+    
+    return {
+      ok: true,
+      sessionId: session.id,
+      clientSecret: session.client_secret
+    };
+  }catch(e){
+    console.log('[Phone] Session Fehler:', e.message);
+    return {ok:false, error: e.message};
   }
 }
 
@@ -906,7 +1111,8 @@ async function connectRealtime(){
           // Mappe Function Namen zu n8n Tools
           const toolMap = {
             'gmail_send': 'gmail.send',
-            'calendar_create': 'calendar.create'
+            'calendar_create': 'calendar.create',
+            'phone_call': 'phone.call'
           };
           
           const tool = toolMap[funcName];
@@ -1379,6 +1585,46 @@ const srv=http.createServer(async (req,res)=>{
       noStore(res,'application/json'); 
       return res.end(JSON.stringify({ok:false, error: e.message}));
     }
+  }
+
+  // Phone Status
+  if (req.method==='GET' && p==='/sira/phone/status'){
+    noStore(res,'application/json');
+    return res.end(JSON.stringify({
+      enabled: PHONE_ENABLED,
+      number: TWILIO_PHONE,
+      configured: !!(TWILIO_SID && TWILIO_TOKEN && TWILIO_PHONE)
+    }));
+  }
+
+  // Phone Call (einfacher TTS Anruf)
+  if (req.method==='POST' && p==='/sira/phone/call'){ if(!checkToken(req,res)) return;
+    const body = await readBody(req);
+    const to = body.to || body.contact;
+    const message = body.message || body.text;
+    
+    if(!to || !message){
+      noStore(res,'application/json');
+      return res.end(JSON.stringify({ok:false, error:'Missing to or message'}));
+    }
+    
+    // Wenn contact ein Name ist, versuche Nummer zu finden
+    let phoneNumber = to;
+    if(!to.startsWith('+')){
+      try{
+        const contactResult = await forwardToN8N({tool: 'contacts.find', query: to});
+        const contactData = JSON.parse(contactResult.body);
+        if(contactData.ok && contactData.results && contactData.results.length > 0){
+          phoneNumber = contactData.results[0].phone || to;
+        }
+      }catch(e){
+        console.log('[Phone] Contact lookup failed:', e.message);
+      }
+    }
+    
+    const result = await twilioCall(phoneNumber, message);
+    noStore(res,'application/json');
+    return res.end(JSON.stringify(result));
   }
 
   // Memory

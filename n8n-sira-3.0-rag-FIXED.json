@@ -1,0 +1,493 @@
+{
+  "name": "Sira 3.0 RAG (FIXED)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sira3-tasks-create",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-main",
+      "name": "Webhook: Sira3 Tasks Create",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "sira3-tasks-create"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "gmail.send", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gmail.send"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "gmail.reply", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gmail.reply"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "calendar.free_slots", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendar.free_slots"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "calendar.create", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendar.create"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "calendar.update", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendar.update"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "contacts.find", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "contacts.find"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "contacts.upsert", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "contacts.upsert"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "web.search", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "web.search"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "web.fetch", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "web.fetch"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "notes.log", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "notes.log"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "typeValidation": "strict"},
+                "conditions": [
+                  {"leftValue": "={{ $json.body.tool || $json.tool }}", "rightValue": "rag.query", "operator": {"type": "string", "operation": "equals"}}
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rag.query"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-tool",
+      "name": "Route by Tool",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalisiere Input: body.to oder direkt to\nconst b = $json.body || $json;\nconst to = b.to || '';\nconst subject = b.subject || '';\nconst text = b.text || '';\nconst html = b.html || '';\nconst cc = b.cc || '';\nconst bcc = b.bcc || '';\n\nif (!to) throw new Error('to required');\nif (!subject) throw new Error('subject required');\n\nreturn [{\n  json: {\n    to: to,\n    subject: subject,\n    text: text,\n    html: html,\n    cc: cc,\n    bcc: bcc\n  }\n}];"
+      },
+      "id": "prep-gmail-send",
+      "name": "Prep: gmail.send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, -200]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html || $json.text }}",
+        "options": {
+          "ccList": "={{ $json.cc }}",
+          "bccList": "={{ $json.bcc }}",
+          "senderName": "the aigency"
+        }
+      },
+      "id": "gmail-send",
+      "name": "Gmail: Send",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [600, -200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HhIq3H8VG57NsZOV",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, id: $json.id, threadId: $json.threadId } }}",
+        "options": {"responseCode": 200}
+      },
+      "id": "respond-gmail-send",
+      "name": "Respond: gmail.send",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [800, -200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || $json;\nconst query = b.query || b.q || '';\nconst maxResults = b.max_results || b.maxResults || 5;\n\nif (!query) throw new Error('query required');\n\nreturn [{ json: { query, maxResults } }];"
+      },
+      "id": "prep-web-search",
+      "name": "Prep: web.search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "url": "https://serpapi.com/search.json",
+        "options": {},
+        "queryParametersUi": {
+          "parameter": [
+            {"name": "engine", "value": "google"},
+            {"name": "q", "value": "={{ $json.query }}"},
+            {"name": "hl", "value": "de"},
+            {"name": "gl", "value": "ch"},
+            {"name": "num", "value": "={{ $json.maxResults }}"}
+          ]
+        }
+      },
+      "id": "serpapi",
+      "name": "SerpAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [600, 0],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "sfA06G4FrIXGPzxU",
+          "name": "Query Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = ($json.organic_results || []).slice(0, 5).map(r => ({\n  title: r.title || '',\n  url: r.link || '',\n  snippet: r.snippet || ''\n}));\n\nreturn [{ json: { ok: true, results } }];"
+      },
+      "id": "shape-web-search",
+      "name": "Shape: web.search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {"responseCode": 200}
+      },
+      "id": "respond-web-search",
+      "name": "Respond: web.search",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1000, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || $json;\nconst url = b.url || '';\nconst strip = b.strip !== false;\nconst limit = b.limit || 8000;\n\nif (!url) throw new Error('url required');\n\nreturn [{ json: { url, strip, limit } }];"
+      },
+      "id": "prep-web-fetch",
+      "name": "Prep: web.fetch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "http-fetch",
+      "name": "HTTP: Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [600, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $json.data || '';\nconst strip = $items('Prep: web.fetch')[0].json.strip;\nconst limit = $items('Prep: web.fetch')[0].json.limit;\nconst url = $items('Prep: web.fetch')[0].json.url;\n\nconst titleMatch = html.match(/<title[^>]*>([^<]+)<\\/title>/i);\nconst title = titleMatch ? titleMatch[1].trim() : '';\n\nlet text = html;\nif (strip) {\n  text = text\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst content = text.slice(0, limit);\n\nreturn [{\n  json: {\n    ok: true,\n    url,\n    title,\n    content,\n    length: content.length,\n    truncated: text.length > limit\n  }\n}];"
+      },
+      "id": "shape-web-fetch",
+      "name": "Shape: web.fetch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {"responseCode": 200}
+      },
+      "id": "respond-web-fetch",
+      "name": "Respond: web.fetch",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || $json;\nconst date = b.date || new Date().toISOString().split('T')[0];\nconst duration = b.duration || 60;\nconst calendarId = b.calendarId || 'primary';\n\nreturn [{ json: { date, duration, calendarId } }];"
+      },
+      "id": "prep-calendar-free",
+      "name": "Prep: calendar.free_slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 400]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{ $json.date }}T00:00:00Z",
+          "timeMax": "={{ $json.date }}T23:59:59Z"
+        }
+      },
+      "id": "calendar-get-events",
+      "name": "Calendar: Get Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [600, 400],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "frnl8B9iRXQE9sT4",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const duration = $items('Prep: calendar.free_slots')[0].json.duration;\nconst date = $items('Prep: calendar.free_slots')[0].json.date;\nconst events = $input.all().map(i => i.json);\n\nconst busy = [];\nfor (const e of events) {\n  const start = new Date(e.start?.dateTime || e.start?.date);\n  const end = new Date(e.end?.dateTime || e.end?.date);\n  if (!isNaN(start) && !isNaN(end)) {\n    busy.push([start, end]);\n  }\n}\n\nbusy.sort((a, b) => a[0] - b[0]);\n\nconst dayStart = new Date(date + 'T08:00:00');\nconst dayEnd = new Date(date + 'T18:00:00');\nconst minMs = duration * 60000;\n\nconst free = [];\nlet cur = dayStart;\n\nfor (const [start, end] of busy) {\n  if (start > cur && (start - cur) >= minMs) {\n    free.push({\n      start: cur.toISOString(),\n      end: new Date(cur.getTime() + minMs).toISOString()\n    });\n  }\n  if (end > cur) cur = end;\n}\n\nif (dayEnd > cur && (dayEnd - cur) >= minMs) {\n  free.push({\n    start: cur.toISOString(),\n    end: new Date(cur.getTime() + minMs).toISOString()\n  });\n}\n\nreturn [{ json: { ok: true, slots: free.slice(0, 10) } }];"
+      },
+      "id": "calc-free-slots",
+      "name": "Calc: Free Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {"responseCode": 200}
+      },
+      "id": "respond-calendar-free",
+      "name": "Respond: calendar.free_slots",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || $json;\nconst summary = b.summary || b.title || '';\nconst start = b.start || '';\nconst end = b.end || '';\nconst description = b.description || '';\nconst location = b.location || '';\nconst calendarId = b.calendarId || 'primary';\n\nif (!summary) throw new Error('summary required');\nif (!start) throw new Error('start required');\nif (!end) throw new Error('end required');\n\nreturn [{ json: { summary, start, end, description, location, calendarId } }];"
+      },
+      "id": "prep-calendar-create",
+      "name": "Prep: calendar.create",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 600]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "additionalFields": {
+          "description": "={{ $json.description }}",
+          "location": "={{ $json.location }}"
+        }
+      },
+      "id": "calendar-create",
+      "name": "Calendar: Create",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [600, 600],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "frnl8B9iRXQE9sT4",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, id: $json.id, link: $json.htmlLink } }}",
+        "options": {"responseCode": 200}
+      },
+      "id": "respond-calendar-create",
+      "name": "Respond: calendar.create",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [800, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'Not implemented yet' } }}",
+        "options": {"responseCode": 501}
+      },
+      "id": "respond-not-impl",
+      "name": "Respond: Not Implemented",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [400, 800]
+    }
+  ],
+  "connections": {
+    "Webhook: Sira3 Tasks Create": {
+      "main": [[{"node": "Route by Tool", "type": "main", "index": 0}]]
+    },
+    "Route by Tool": {
+      "main": [
+        [{"node": "Prep: gmail.send", "type": "main", "index": 0}],
+        [{"node": "Respond: Not Implemented", "type": "main", "index": 0}],
+        [{"node": "Prep: calendar.free_slots", "type": "main", "index": 0}],
+        [{"node": "Prep: calendar.create", "type": "main", "index": 0}],
+        [{"node": "Respond: Not Implemented", "type": "main", "index": 0}],
+        [{"node": "Respond: Not Implemented", "type": "main", "index": 0}],
+        [{"node": "Respond: Not Implemented", "type": "main", "index": 0}],
+        [{"node": "Prep: web.search", "type": "main", "index": 0}],
+        [{"node": "Prep: web.fetch", "type": "main", "index": 0}],
+        [{"node": "Respond: Not Implemented", "type": "main", "index": 0}],
+        [{"node": "Respond: Not Implemented", "type": "main", "index": 0}]
+      ]
+    },
+    "Prep: gmail.send": {
+      "main": [[{"node": "Gmail: Send", "type": "main", "index": 0}]]
+    },
+    "Gmail: Send": {
+      "main": [[{"node": "Respond: gmail.send", "type": "main", "index": 0}]]
+    },
+    "Prep: web.search": {
+      "main": [[{"node": "SerpAPI", "type": "main", "index": 0}]]
+    },
+    "SerpAPI": {
+      "main": [[{"node": "Shape: web.search", "type": "main", "index": 0}]]
+    },
+    "Shape: web.search": {
+      "main": [[{"node": "Respond: web.search", "type": "main", "index": 0}]]
+    },
+    "Prep: web.fetch": {
+      "main": [[{"node": "HTTP: Fetch", "type": "main", "index": 0}]]
+    },
+    "HTTP: Fetch": {
+      "main": [[{"node": "Shape: web.fetch", "type": "main", "index": 0}]]
+    },
+    "Shape: web.fetch": {
+      "main": [[{"node": "Respond: web.fetch", "type": "main", "index": 0}]]
+    },
+    "Prep: calendar.free_slots": {
+      "main": [[{"node": "Calendar: Get Events", "type": "main", "index": 0}]]
+    },
+    "Calendar: Get Events": {
+      "main": [[{"node": "Calc: Free Slots", "type": "main", "index": 0}]]
+    },
+    "Calc: Free Slots": {
+      "main": [[{"node": "Respond: calendar.free_slots", "type": "main", "index": 0}]]
+    },
+    "Prep: calendar.create": {
+      "main": [[{"node": "Calendar: Create", "type": "main", "index": 0}]]
+    },
+    "Calendar: Create": {
+      "main": [[{"node": "Respond: calendar.create", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fixed-version-1",
+  "id": "sira-3-rag-fixed",
+  "tags": []
+}

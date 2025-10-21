@@ -1,0 +1,222 @@
+{
+  "name": "📤 WF2B: Send Approved Messages",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 14 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-send",
+      "name": "⏰ Daily 2:00 PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 400],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "google_sheet_id",
+              "type": "string",
+              "value": "YOUR_SHEET_ID"
+            },
+            {
+              "id": "a2",
+              "name": "hubspot_api_key",
+              "type": "string",
+              "value": "YOUR_HUBSPOT_KEY"
+            },
+            {
+              "id": "a3",
+              "name": "daily_send_limit",
+              "type": "number",
+              "value": 50
+            }
+          ]
+        }
+      },
+      "id": "config-send",
+      "name": "⚙️ Send Config",
+      "type": "n8n-nodes-base.set",
+      "position": [480, 400],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "status",
+              "lookupValue": "Approved"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-approved",
+      "name": "✅ Get Approved Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [720, 400],
+      "typeVersion": 4.7
+    },
+    {
+      "parameters": {
+        "maxItems": "={{ $('⚙️ Send Config').item.json.daily_send_limit }}"
+      },
+      "id": "limit-sends",
+      "name": "🚦 Limit Daily Sends",
+      "type": "n8n-nodes-base.limit",
+      "position": [960, 400],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-approved",
+      "name": "🔁 Loop Approved",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [1200, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "wait-rate-limit",
+      "name": "⏱️ Wait (Rate Limit)",
+      "type": "n8n-nodes-base.wait",
+      "position": [1440, 400],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.email_body }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "📧 Send Email (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "position": [1680, 400],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.hubapi.com/crm/v3/objects/contacts/{{ $json.hubspot_contact_id }}/notes",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('⚙️ Send Config').item.json.hubspot_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"hs_note_body\": \"📧 Outreach Email Sent\\n\\nSubject: {{ $json.email_subject }}\\n\\nPersonalization: {{ $json.personalization_hook }}\\n\\nValue Metric: {{ $json.value_metric }}\\n\\nSent at: {{ $now.toISO() }}\"\n  }\n}"
+      },
+      "id": "log-hubspot",
+      "name": "📝 Log to HubSpot",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1920, 400],
+      "typeVersion": 4.2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('⚙️ Send Config').item.json.google_sheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $('🔁 Loop Approved').item.json.email }}",
+            "status": "Sent",
+            "sent_at": "={{ $now.toISO() }}",
+            "sent_channel": "Email",
+            "sequence_day": "0"
+          },
+          "matchingColumns": ["email"]
+        }
+      },
+      "id": "update-status",
+      "name": "✅ Update Status: Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2160, 400],
+      "typeVersion": 4.6
+    }
+  ],
+  "connections": {
+    "⏰ Daily 2:00 PM": {
+      "main": [[{ "node": "⚙️ Send Config", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Send Config": {
+      "main": [[{ "node": "✅ Get Approved Leads", "type": "main", "index": 0 }]]
+    },
+    "✅ Get Approved Leads": {
+      "main": [[{ "node": "🚦 Limit Daily Sends", "type": "main", "index": 0 }]]
+    },
+    "🚦 Limit Daily Sends": {
+      "main": [[{ "node": "🔁 Loop Approved", "type": "main", "index": 0 }]]
+    },
+    "🔁 Loop Approved": {
+      "main": [
+        [],
+        [{ "node": "⏱️ Wait (Rate Limit)", "type": "main", "index": 0 }]
+      ]
+    },
+    "⏱️ Wait (Rate Limit)": {
+      "main": [[{ "node": "📧 Send Email (Gmail)", "type": "main", "index": 0 }]]
+    },
+    "📧 Send Email (Gmail)": {
+      "main": [[{ "node": "📝 Log to HubSpot", "type": "main", "index": 0 }]]
+    },
+    "📝 Log to HubSpot": {
+      "main": [[{ "node": "✅ Update Status: Sent", "type": "main", "index": 0 }]]
+    },
+    "✅ Update Status: Sent": {
+      "main": [[{ "node": "🔁 Loop Approved", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
