@@ -581,11 +581,11 @@ async function twilioCall(to, message){
   }
   
   const auth = Buffer.from(TWILIO_SID + ':' + TWILIO_TOKEN).toString('base64');
-  const url = \`https://api.twilio.com/2010-04-01/Accounts/\${TWILIO_SID}/Calls.json\`;
+  const url = 'https://api.twilio.com/2010-04-01/Accounts/' + TWILIO_SID + '/Calls.json';
   
   try{
     console.log('[Twilio] Rufe an:', to);
-    const twiml = \`<Response><Say voice="Polly.Vicki" language="de-DE">\${message}</Say></Response>\`;
+    const twiml = '<Response><Say voice="Polly.Vicki" language="de-DE">' + message + '</Say></Response>';
     
     const params = new URLSearchParams({
       To: to,
@@ -630,18 +630,18 @@ async function twilioCallWithRealtime(to, contactName){
   }
   
   const auth = Buffer.from(TWILIO_SID + ':' + TWILIO_TOKEN).toString('base64');
-  const url = \`https://api.twilio.com/2010-04-01/Accounts/\${TWILIO_SID}/Calls.json\`;
+  const url = 'https://api.twilio.com/2010-04-01/Accounts/' + TWILIO_SID + '/Calls.json';
   
   try{
     console.log('[Twilio] Rufe an mit Realtime:', to);
     
     // TwiML mit Connect zu Realtime
-    const twiml = \`<Response>
-      <Say voice="Polly.Vicki" language="de-DE">Hallo, hier ist Sira.</Say>
-      <Connect>
-        <Stream url="wss://sira.theaigency.ch/sira/phone/stream/\${rtSession.sessionId}" />
-      </Connect>
-    </Response>\`;
+    const twiml = '<Response>' +
+      '<Say voice="Polly.Vicki" language="de-DE">Hallo, hier ist Sira.</Say>' +
+      '<Connect>' +
+        '<Stream url="wss://sira.theaigency.ch/sira/phone/stream/' + rtSession.sessionId + '" />' +
+      '</Connect>' +
+    '</Response>';
     
     const params = new URLSearchParams({
       To: to,
@@ -679,24 +679,19 @@ async function createPhoneRealtimeSession(callerName, callerNumber){
     const profile = await loadProfile();
     const shortMem = memTail(8000);
     
-    const phoneInstructions = \`Du bist Sira, die persönliche Assistentin von \${PHONE_OWNER}.
-
-AKTUELLER ANRUF:
-- Anrufer: \${callerName}
-- Nummer: \${callerNumber}
-
-DEINE AUFGABEN:
-1. Freundlich und professionell sein
-2. Fragen worum es geht
-3. Je nach Anliegen:
-   - Termin vereinbaren (calendar_create)
-   - Nachricht entgegennehmen (notes_log)
-   - Informationen geben
-
-KONTEXT:
-\${shortMem}
-
-Sei kurz und präzise - das ist ein Telefongespräch!\`;
+    const phoneInstructions = 'Du bist Sira, die persönliche Assistentin von ' + PHONE_OWNER + '.\n\n' +
+      'AKTUELLER ANRUF:\n' +
+      '- Anrufer: ' + callerName + '\n' +
+      '- Nummer: ' + callerNumber + '\n\n' +
+      'DEINE AUFGABEN:\n' +
+      '1. Freundlich und professionell sein\n' +
+      '2. Fragen worum es geht\n' +
+      '3. Je nach Anliegen:\n' +
+      '   - Termin vereinbaren (calendar_create)\n' +
+      '   - Nachricht entgegennehmen (notes_log)\n' +
+      '   - Informationen geben\n\n' +
+      'KONTEXT:\n' + shortMem + '\n\n' +
+      'Sei kurz und präzise - das ist ein Telefongespräch!';
 
     const tools = [
       {
