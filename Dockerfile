@@ -504,6 +504,18 @@ async function createRealtimeEphemeral(){
       },
       {
         type: 'function',
+        name: 'gmail_get',
+        description: 'Ruft Emails aus Gmail ab',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {type: 'string', description: 'Suchbegriff (optional)'},
+            maxResults: {type: 'number', description: 'Max. Anzahl Emails (optional, default: 10)'}
+          }
+        }
+      },
+      {
+        type: 'function',
         name: 'calendar_list',
         description: 'Zeigt Termine im Google Calendar an',
         parameters: {
@@ -532,6 +544,21 @@ async function createRealtimeEphemeral(){
       },
       {
         type: 'function',
+        name: 'calendar_update',
+        description: 'Aktualisiert einen bestehenden Termin',
+        parameters: {
+          type: 'object',
+          properties: {
+            eventId: {type: 'string', description: 'Event ID des Termins'},
+            summary: {type: 'string', description: 'Neuer Titel (optional)'},
+            start: {type: 'string', description: 'Neue Startzeit (ISO 8601, optional)'},
+            end: {type: 'string', description: 'Neue Endzeit (ISO 8601, optional)'}
+          },
+          required: ['eventId']
+        }
+      },
+      {
+        type: 'function',
         name: 'contacts_find',
         description: 'Sucht nach Kontakten',
         parameters: {
@@ -552,6 +579,31 @@ async function createRealtimeEphemeral(){
             query: {type: 'string', description: 'Suchanfrage'}
           },
           required: ['query']
+        }
+      },
+      {
+        type: 'function',
+        name: 'weather_get',
+        description: 'Ruft Wetterinformationen ab',
+        parameters: {
+          type: 'object',
+          properties: {
+            location: {type: 'string', description: 'Stadt oder Ort'}
+          },
+          required: ['location']
+        }
+      },
+      {
+        type: 'function',
+        name: 'notes_log',
+        description: 'Speichert eine Notiz oder Nachricht',
+        parameters: {
+          type: 'object',
+          properties: {
+            note: {type: 'string', description: 'Die Notiz'},
+            category: {type: 'string', description: 'Kategorie (optional)'}
+          },
+          required: ['note']
         }
       },
       {
@@ -1143,10 +1195,14 @@ async function connectRealtime(){
           // Mappe Function Namen zu n8n Tools
           const toolMap = {
             'gmail_send': 'gmail.send',
+            'gmail_get': 'gmail.get',
             'calendar_list': 'calendar.list',
             'calendar_create': 'calendar.create',
+            'calendar_update': 'calendar.update',
             'contacts_find': 'contacts.find',
             'web_search': 'web.search',
+            'weather_get': 'weather.get',
+            'notes_log': 'notes.log',
             'phone_call': 'phone.call'
           };
           
