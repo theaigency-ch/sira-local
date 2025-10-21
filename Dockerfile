@@ -517,7 +517,7 @@ async function createRealtimeEphemeral(){
       {
         type: 'function',
         name: 'calendar_list',
-        description: 'Zeigt Termine im Google Calendar an',
+        description: 'Zeigt anstehende Termine und Events aus dem Google Calendar an. Nutze dies wenn der User nach seinen Terminen, Meetings oder Events fragt.',
         parameters: {
           type: 'object',
           properties: {
