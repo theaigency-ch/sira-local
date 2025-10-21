@@ -504,6 +504,19 @@ async function createRealtimeEphemeral(){
       },
       {
         type: 'function',
+        name: 'calendar_list',
+        description: 'Zeigt Termine im Google Calendar an',
+        parameters: {
+          type: 'object',
+          properties: {
+            start: {type: 'string', description: 'Startdatum (ISO 8601, optional)'},
+            end: {type: 'string', description: 'Enddatum (ISO 8601, optional)'},
+            maxResults: {type: 'number', description: 'Max. Anzahl Termine (optional, default: 10)'}
+          }
+        }
+      },
+      {
+        type: 'function',
         name: 'calendar_create',
         description: 'Erstellt einen Termin im Google Calendar',
         parameters: {
@@ -515,6 +528,30 @@ async function createRealtimeEphemeral(){
             description: {type: 'string', description: 'Beschreibung (optional)'}
           },
           required: ['summary', 'start', 'end']
+        }
+      },
+      {
+        type: 'function',
+        name: 'contacts_find',
+        description: 'Sucht nach Kontakten',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {type: 'string', description: 'Suchbegriff (Name, Email, etc.)'}
+          },
+          required: ['query']
+        }
+      },
+      {
+        type: 'function',
+        name: 'web_search',
+        description: 'Sucht im Web nach Informationen',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {type: 'string', description: 'Suchanfrage'}
+          },
+          required: ['query']
         }
       },
       {
@@ -1106,7 +1143,10 @@ async function connectRealtime(){
           // Mappe Function Namen zu n8n Tools
           const toolMap = {
             'gmail_send': 'gmail.send',
+            'calendar_list': 'calendar.list',
             'calendar_create': 'calendar.create',
+            'contacts_find': 'contacts.find',
+            'web_search': 'web.search',
             'phone_call': 'phone.call'
           };
           
