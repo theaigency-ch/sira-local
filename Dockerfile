@@ -477,7 +477,40 @@ async function createRealtimeEphemeral(){
       oldMemText +
       factsText +
       '\n\nStandort/Default: Schweiz (de-CH). Bevorzuge .ch-Quellen und CH-Perspektive, ausser explizit anders.' +
-      '\nRealtime/v2: Bei E-Mail-Auftrag gib EXAKT "__N8N__ {\\"tool\\":\\"gmail.send\\",\\"to\\":\\"...\\",\\"subject\\":\\"...\\",\\"text\\":\\"...\\"}" und sonst NICHTS.';
+      '\n\nWenn der Nutzer eine Aktion möchte (Email, Termin, etc.), nutze die verfügbaren Functions.';
+
+    // Definiere Tools als Functions für Realtime
+    const tools = [
+      {
+        type: 'function',
+        name: 'gmail_send',
+        description: 'Sendet eine Email via Gmail',
+        parameters: {
+          type: 'object',
+          properties: {
+            to: {type: 'string', description: 'Email-Adresse des Empfängers'},
+            subject: {type: 'string', description: 'Betreff der Email'},
+            text: {type: 'string', description: 'Text der Email'}
+          },
+          required: ['to', 'subject', 'text']
+        }
+      },
+      {
+        type: 'function',
+        name: 'calendar_create',
+        description: 'Erstellt einen Termin im Google Calendar',
+        parameters: {
+          type: 'object',
+          properties: {
+            summary: {type: 'string', description: 'Titel des Termins'},
+            start: {type: 'string', description: 'Startzeit (ISO 8601)'},
+            end: {type: 'string', description: 'Endzeit (ISO 8601)'},
+            description: {type: 'string', description: 'Beschreibung (optional)'}
+          },
+          required: ['summary', 'start', 'end']
+        }
+      }
+    ];
 
     const r = await withTimeout(BASE+'/v1/realtime/sessions',{
       method:'POST',
@@ -490,7 +523,9 @@ async function createRealtimeEphemeral(){
         model: MODEL_RT,
         voice: VOICE_RT,
         modalities:['audio','text'],
-        instructions: rtInstr
+        instructions: rtInstr,
+        tools: tools,
+        tool_choice: 'auto'
       })
     },10000);
     const txt=await r.text(); let js=null; try{js=JSON.parse(txt)}catch{}
@@ -850,7 +885,7 @@ async function connectRealtime(){
       }));
       console.log('[Realtime] Audio-Transkription aktiviert');
     };
-    dc.onmessage = (e)=>{ 
+    dc.onmessage = async (e)=>{ 
       try{ 
         const js=JSON.parse(e.data); 
         console.log('[Realtime Event]', js.type);
@@ -859,6 +894,48 @@ async function connectRealtime(){
         if(js?.type==='conversation.item.input_audio_transcription.completed'){
           userTranscript = (userTranscript ? userTranscript + ' ' : '') + (js.transcript || '');
           console.log('[Memory] User:', js.transcript);
+        }
+        
+        // Function Call erkannt!
+        if(js?.type==='response.function_call_arguments.done'){
+          const funcName = js.name;
+          const funcArgs = JSON.parse(js.arguments || '{}');
+          console.log('[Function Call]', funcName, funcArgs);
+          hint.textContent = 'Führe Aktion aus...';
+          
+          // Mappe Function Namen zu n8n Tools
+          const toolMap = {
+            'gmail_send': 'gmail.send',
+            'calendar_create': 'calendar.create'
+          };
+          
+          const tool = toolMap[funcName];
+          if(tool){
+            try{
+              const response = await fetch('/sira/input', {
+                method: 'POST',
+                headers: {'content-type': 'application/json', 'x-sira-token': FIXED_TOKEN},
+                body: JSON.stringify({tool: tool, ...funcArgs})
+              });
+              const result = await response.json();
+              console.log('[Function Result]', result);
+              
+              // Sende Result zurück an Realtime
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: {
+                  type: 'function_call_output',
+                  call_id: js.call_id,
+                  output: JSON.stringify(result)
+                }
+              }));
+              
+              hint.textContent = result.ok ? 'Aktion erfolgreich!' : 'Aktion fehlgeschlagen';
+            }catch(err){
+              console.error('[Function Call Error]', err);
+              hint.textContent = 'Fehler bei Aktion';
+            }
+          }
         }
         
         // Assistant Audio-Transkript (wichtig!)
