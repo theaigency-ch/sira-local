@@ -994,7 +994,246 @@ function manifestJSONv2(){
   };
 }
 
-/* ---------------------- Intent: E-Mail (Textpfad) -------------------------- */
+/* ---------------------- LLM-basierte Intent-Erkennung ---------------------- */
+async function parseIntentLLM(userQ){
+  if(!KEY || !userQ) return null;
+  
+  const profile = await loadProfile();
+  const prompt = `Du bist ein Intent-Parser für einen Voice Assistant.
+
+User sagt: "${userQ}"
+
+Benutzerprofil:
+- Name: ${profile.name || 'Unbekannt'}
+- Privat-Email: ${profile.email_private || 'Nicht gesetzt'}
+- Arbeit-Email: ${profile.email_work || 'Nicht gesetzt'}
+
+Verfügbare Tools:
+1. gmail.send: {to, subject, text} - Email senden
+2. gmail.get: {filter, limit} - Emails abrufen (filter: "is:unread", "from:email", "subject:text")
+3. calendar.create: {summary, start, end, description, location} - Termin erstellen (start/end: ISO 8601)
+4. calendar.list: {date} - Termine auflisten (date: "today", "tomorrow", "this_week", "YYYY-MM-DD")
+5. calendar.update: {event_id, summary, start, end} - Termin aktualisieren
+6. weather.get: {location, days} - Wetter abrufen
+7. news.get: {category, limit} - News (category: "schweiz", "international", "tech", "business")
+8. contacts.find: {query} - Kontakte suchen
+9. contacts.upsert: {name, email, phone} - Kontakt erstellen/aktualisieren
+10. reminder.set: {title, date, notes} - Erinnerung setzen
+11. web.search: {query, maxResults} - Google-Suche
+12. notes.log: {note, category} - Notiz speichern
+
+Regeln:
+- Wenn User "privat" oder "private" sagt → to: "${profile.email_private}"
+- Wenn User "arbeit", "geschäft", "firma" sagt → to: "${profile.email_work}"
+- Datum "morgen" → berechne morgiges Datum
+- Datum "nächste Woche" → berechne nächsten Montag
+- Zeit "14 Uhr" → "14:00:00"
+- Wenn kein Tool passt → null
+
+Antwort NUR als JSON (kein Text davor/danach):
+{
+  "tool": "tool_name",
+  "params": {...},
+  "confidence": 0.0-1.0
+}
+
+Wenn keine Absicht erkannt: {"tool": null, "confidence": 0.0}`;
+
+  try{
+    const r = await withTimeout(BASE+'/v1/chat/completions',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+KEY,'content-type':'application/json'},
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{role:'user',content:prompt}],
+        response_format: {type: 'json_object'},
+        temperature: 0.3
+      })
+    },15000);  // Erhöht auf 15 Sekunden für stabilere LLM-Calls
+    
+    if(!r.ok) {
+      console.log('[Intent] LLM-Fehler:', r.status);
+      return null;
+    }
+    
+    const js = await r.json();
+    const content = js.choices?.[0]?.message?.content;
+    if(!content) return null;
+    
+    const result = JSON.parse(content);
+    
+    if(result.tool && result.confidence > 0.6){
+      console.log('[Intent] Erkannt:', result.tool, 'Confidence:', result.confidence, 'Params:', JSON.stringify(result.params));
+      return {tool: result.tool, params: result.params, confidence: result.confidence};
+    }
+    
+    console.log('[Intent] Zu niedrige Confidence:', result.confidence);
+    return null;
+  }catch(e){
+    console.log('[Intent] LLM-Parse-Fehler:', e.message);
+    return null;
+  }
+}
+
+/* ---------------------- Multi-Step Workflow Engine ------------------------- */
+function replaceVariables(params, results){
+  const replaced = {};
+  for(const key in params){
+    let value = params[key];
+    if(typeof value === 'string'){
+      // Ersetze {{step.field}} mit Wert aus vorherigem Schritt
+      const matches = value.matchAll(/\{\{([^.]+)\.(.+?)\}\}/g);
+      for(const match of matches){
+        const stepName = match[1];
+        const path = match[2];
+        const stepResult = results.find(r => r.tool === stepName);
+        if(stepResult){
+          const val = getNestedValue(stepResult.result, path);
+          if(val !== undefined){
+            value = value.replace(match[0], val);
+          }
+        }
+      }
+    }
+    replaced[key] = value;
+  }
+  return replaced;
+}
+
+function getNestedValue(obj, path){
+  const parts = path.split(/[\.\[\]]+/).filter(Boolean);
+  let current = obj;
+  for(const part of parts){
+    if(current === null || current === undefined) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+async function executeWorkflow(steps){
+  const results = [];
+  console.log('[Workflow] Starte mit', steps.length, 'Schritten');
+  
+  for(let i=0; i<steps.length; i++){
+    const step = steps[i];
+    console.log('[Workflow] Schritt', (i+1) + ':', step.tool);
+    
+    // Ersetze Variablen aus vorherigen Schritten
+    const params = replaceVariables(step.params, results);
+    console.log('[Workflow] Params:', JSON.stringify(params));
+    
+    const fwd = await forwardToN8N({tool: step.tool, ...params});
+    let result;
+    try{
+      result = JSON.parse(fwd.body);
+    }catch{
+      result = {ok: false, error: 'Invalid JSON response'};
+    }
+    
+    results.push({
+      tool: step.tool,
+      result: result,
+      status: fwd.status
+    });
+    
+    // Fehlerbehandlung
+    if(fwd.status !== 200 || !result.ok){
+      console.log('[Workflow] Fehler bei Schritt', (i+1) + ':', step.tool);
+      return {
+        ok: false, 
+        error: 'Workflow failed at step ' + (i+1) + ': ' + step.tool,
+        completedSteps: i,
+        results: results
+      };
+    }
+  }
+  
+  console.log('[Workflow] Erfolgreich abgeschlossen');
+  return {ok: true, results: results};
+}
+
+/* ---------------------- Proaktives Morgen-Briefing ------------------------- */
+async function generateMorningBriefing(){
+  console.log('[Briefing] Generiere Morgen-Briefing...');
+  
+  try{
+    // Parallel alle Daten abrufen
+    const [weather, news, emails, events] = await Promise.all([
+      forwardToN8N({tool: 'weather.get', location: 'Zürich', days: 1}),
+      forwardToN8N({tool: 'news.get', category: 'schweiz', limit: 3}),
+      forwardToN8N({tool: 'gmail.get', filter: 'is:unread', limit: 5}),
+      forwardToN8N({tool: 'calendar.list', date: 'today'})
+    ]);
+    
+    const weatherData = JSON.parse(weather.body);
+    const newsData = JSON.parse(news.body);
+    const emailsData = JSON.parse(emails.body);
+    const eventsData = JSON.parse(events.body);
+    
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('de-CH', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+    
+    let briefing = `Guten Morgen! ☀️ Heute ist ${dateStr}\n\n`;
+    
+    // Wetter
+    if(weatherData.ok){
+      briefing += `**Wetter in Zürich:**\n`;
+      briefing += `Aktuell ${weatherData.current.temp}°C, ${weatherData.current.condition}\n`;
+      if(weatherData.forecast && weatherData.forecast[0]){
+        briefing += `Heute: ${weatherData.forecast[0].temp_min}-${weatherData.forecast[0].temp_max}°C, ${weatherData.forecast[0].condition}\n\n`;
+      }
+    }
+    
+    // Termine
+    if(eventsData.ok){
+      briefing += `**Termine heute:** ${eventsData.count || 0}\n`;
+      if(eventsData.events && eventsData.events.length > 0){
+        eventsData.events.slice(0, 5).forEach(e => {
+          const time = e.start.includes('T') ? e.start.split('T')[1].slice(0,5) : '';
+          briefing += `- ${time}: ${e.summary}${e.location ? ' (' + e.location + ')' : ''}\n`;
+        });
+      } else {
+        briefing += `Keine Termine heute.\n`;
+      }
+      briefing += '\n';
+    }
+    
+    // Emails
+    if(emailsData.ok){
+      briefing += `**Ungelesene Mails:** ${emailsData.count || 0}\n`;
+      if(emailsData.emails && emailsData.emails.length > 0){
+        emailsData.emails.slice(0, 3).forEach(e => {
+          const from = e.from.includes('<') ? e.from.split('<')[0].trim() : e.from;
+          briefing += `- ${from}: ${e.subject}\n`;
+        });
+        if(emailsData.count > 3){
+          briefing += `... und ${emailsData.count - 3} weitere\n`;
+        }
+      }
+      briefing += '\n';
+    }
+    
+    // News
+    if(newsData.ok && newsData.summary){
+      briefing += `**Nachrichten:**\n`;
+      briefing += newsData.summary.slice(0, 300);
+      if(newsData.summary.length > 300) briefing += '...';
+      briefing += '\n\n';
+      if(newsData.sources && newsData.sources.length > 0){
+        briefing += `Quellen: ${newsData.sources.slice(0, 2).join(', ')}\n`;
+      }
+    }
+    
+    console.log('[Briefing] Erfolgreich generiert');
+    return {ok: true, text: briefing};
+    
+  }catch(e){
+    console.log('[Briefing] Fehler:', e.message);
+    return {ok: false, error: e.message};
+  }
+}
+
+/* ---------------------- Intent: E-Mail (Legacy Fallback) ------------------- */
 function parseMailIntent(q){
   if(!q) return null;
   const s=String(q).toLowerCase();
@@ -1138,11 +1377,29 @@ const srv=http.createServer(async (req,res)=>{
     const body=await readBody(req); const fwd=await forwardToN8N(body);
     res.writeHead(fwd.status, {'content-type':fwd.ctype,'cache-control':'no-store'}); return res.end(fwd.body); }
 
-  // Chat/TTS + E-Mail Intent (Textpfad)
+  // Chat/TTS + LLM Intent Recognition
   if (req.method==='POST' && p==='/sira/ask'){ if(!checkToken(req,res)) return;
     const body=await readBody(req); const wantVoice=!!body.voice; const q=body.q||'';
+    
+    // 1. Versuche LLM-basierte Intent-Erkennung
+    const llmIntent = await parseIntentLLM(q);
+    if (llmIntent){ 
+      console.log('[Ask] LLM Intent erkannt:', llmIntent.tool);
+      const fwd=await forwardToN8N({tool: llmIntent.tool, ...llmIntent.params}); 
+      res.writeHead(fwd.status, {'content-type':fwd.ctype,'cache-control':'no-store'}); 
+      return res.end(fwd.body); 
+    }
+    
+    // 2. Fallback: Legacy Email Intent
     const intent=parseMailIntent(q);
-    if (intent){ const fwd=await forwardToN8N(intent); res.writeHead(fwd.status, {'content-type':fwd.ctype,'cache-control':'no-store'}); return res.end(fwd.body); }
+    if (intent){ 
+      console.log('[Ask] Legacy Intent erkannt: gmail.send');
+      const fwd=await forwardToN8N(intent); 
+      res.writeHead(fwd.status, {'content-type':fwd.ctype,'cache-control':'no-store'}); 
+      return res.end(fwd.body); 
+    }
+    
+    // 3. Normale Konversation
     if (wantVoice){
       const ans=await askSpeech(q);
       if (ans.audio){ res.writeHead(200, {'content-type':ans.ctype||'audio/mpeg','cache-control':'no-store'}); return res.end(ans.audio); }
@@ -1151,6 +1408,39 @@ const srv=http.createServer(async (req,res)=>{
       const ans=await askText(q);
       res.writeHead(ans.ok?200:500, {'content-type':'application/json','cache-control':'no-store'}); return res.end(JSON.stringify(ans));
     }
+  }
+  
+  // Workflow Execution Endpoint
+  if (req.method==='POST' && p==='/sira/workflow'){ if(!checkToken(req,res)) return;
+    const body=await readBody(req);
+    const steps = body.steps || [];
+    if(!steps || steps.length === 0){
+      noStore(res,'application/json'); 
+      return res.end(JSON.stringify({ok:false, error:'No steps provided'}));
+    }
+    const result = await executeWorkflow(steps);
+    noStore(res,'application/json'); 
+    return res.end(JSON.stringify(result));
+  }
+  
+  // Morning Briefing Endpoint
+  if (req.method==='GET' && p==='/sira/briefing'){ if(!checkToken(req,res)) return;
+    const briefing = await generateMorningBriefing();
+    noStore(res,'application/json'); 
+    return res.end(JSON.stringify(briefing));
+  }
+  
+  // Morning Briefing Send (für Cronjob)
+  if (req.method==='POST' && p==='/sira/briefing/send'){ if(!checkToken(req,res)) return;
+    const briefing = await generateMorningBriefing();
+    if(briefing.ok){
+      // Speichere im Memory
+      memAppend('System(Briefing): ' + briefing.text);
+      // Optional: Sende via Email/Telegram (später implementieren)
+      console.log('[Briefing] Gesendet:', briefing.text.slice(0, 100) + '...');
+    }
+    noStore(res,'application/json'); 
+    return res.end(JSON.stringify(briefing));
   }
 
   // Realtime: Ephemeral (für v2)
