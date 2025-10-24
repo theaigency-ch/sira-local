@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  sira_api_v3:
+    build: .
+    container_name: sira_api_v3
+    env_file:
+      - .env
+    ports:
+      - "8791:8791"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - sira_net
+    restart: unless-stopped
+
+networks:
+  sira_net:
+    external: true
+    name: windsurf-project_sira_net

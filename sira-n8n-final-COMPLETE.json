@@ -312,7 +312,7 @@
       "id": "switch",
       "name": "Route",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
+      "typeVersion": 2,
       "position": [
         400,
         0

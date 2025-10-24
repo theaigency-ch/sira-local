@@ -1,0 +1,487 @@
+{
+  "name": "Sira IF Router (Import Only)",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.tool && $json.tool.startsWith('calendar.')}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-calendar-group",
+      "name": "IF calendar.*",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "calendar.list"
+            }
+          ]
+        }
+      },
+      "id": "if-calendar-list",
+      "name": "IF calendar.list",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "calendar.create"
+            }
+          ]
+        }
+      },
+      "id": "if-calendar-create",
+      "name": "IF calendar.create",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "calendar.update"
+            }
+          ]
+        }
+      },
+      "id": "if-calendar-update",
+      "name": "IF calendar.update",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [700, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "calendar.free_slots"
+            }
+          ]
+        }
+      },
+      "id": "if-calendar-free",
+      "name": "IF calendar.free_slots",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.tool && $json.tool.startsWith('gmail.')}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-gmail-group",
+      "name": "IF gmail.*",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "gmail.send"
+            }
+          ]
+        }
+      },
+      "id": "if-gmail-send",
+      "name": "IF gmail.send",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "gmail.reply"
+            }
+          ]
+        }
+      },
+      "id": "if-gmail-reply",
+      "name": "IF gmail.reply",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "gmail.get"
+            }
+          ]
+        }
+      },
+      "id": "if-gmail-get",
+      "name": "IF gmail.get",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [700, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.tool && $json.tool.startsWith('contacts.')}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-contacts-group",
+      "name": "IF contacts.*",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "contacts.find"
+            }
+          ]
+        }
+      },
+      "id": "if-contacts-find",
+      "name": "IF contacts.find",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "contacts.upsert"
+            }
+          ]
+        }
+      },
+      "id": "if-contacts-upsert",
+      "name": "IF contacts.upsert",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.tool && $json.tool.startsWith('web.')}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-web-group",
+      "name": "IF web.*",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "web.search"
+            }
+          ]
+        }
+      },
+      "id": "if-web-search",
+      "name": "IF web.search",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "web.fetch"
+            }
+          ]
+        }
+      },
+      "id": "if-web-fetch",
+      "name": "IF web.fetch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "notes.log"
+            }
+          ]
+        }
+      },
+      "id": "if-notes",
+      "name": "IF notes.log",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "weather.get"
+            }
+          ]
+        }
+      },
+      "id": "if-weather",
+      "name": "IF weather.get",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 1000]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "news.get"
+            }
+          ]
+        }
+      },
+      "id": "if-news",
+      "name": "IF news.get",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 1200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "perplexity.search"
+            }
+          ]
+        }
+      },
+      "id": "if-perplexity",
+      "name": "IF perplexity.search",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 1400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.tool}}",
+              "operation": "equals",
+              "value2": "reminder.set"
+            }
+          ]
+        }
+      },
+      "id": "if-reminder",
+      "name": "IF reminder.set",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [100, 1600]
+    }
+  ],
+  "connections": {
+    "IF calendar.*": {
+      "main": [
+        [{"node": "IF calendar.list", "type": "main", "index": 0}],
+        [{"node": "IF gmail.*", "type": "main", "index": 0}]
+      ]
+    },
+    "IF calendar.list": {
+      "main": [
+        [],
+        [{"node": "IF calendar.create", "type": "main", "index": 0}]
+      ]
+    },
+    "IF calendar.create": {
+      "main": [
+        [],
+        [{"node": "IF calendar.update", "type": "main", "index": 0}]
+      ]
+    },
+    "IF calendar.update": {
+      "main": [
+        [],
+        [{"node": "IF calendar.free_slots", "type": "main", "index": 0}]
+      ]
+    },
+    "IF calendar.free_slots": {
+      "main": [
+        [],
+        [{"node": "IF gmail.*", "type": "main", "index": 0}]
+      ]
+    },
+    "IF gmail.*": {
+      "main": [
+        [{"node": "IF gmail.send", "type": "main", "index": 0}],
+        [{"node": "IF contacts.*", "type": "main", "index": 0}]
+      ]
+    },
+    "IF gmail.send": {
+      "main": [
+        [],
+        [{"node": "IF gmail.reply", "type": "main", "index": 0}]
+      ]
+    },
+    "IF gmail.reply": {
+      "main": [
+        [],
+        [{"node": "IF gmail.get", "type": "main", "index": 0}]
+      ]
+    },
+    "IF gmail.get": {
+      "main": [
+        [],
+        [{"node": "IF contacts.*", "type": "main", "index": 0}]
+      ]
+    },
+    "IF contacts.*": {
+      "main": [
+        [{"node": "IF contacts.find", "type": "main", "index": 0}],
+        [{"node": "IF web.*", "type": "main", "index": 0}]
+      ]
+    },
+    "IF contacts.find": {
+      "main": [
+        [],
+        [{"node": "IF contacts.upsert", "type": "main", "index": 0}]
+      ]
+    },
+    "IF contacts.upsert": {
+      "main": [
+        [],
+        [{"node": "IF web.*", "type": "main", "index": 0}]
+      ]
+    },
+    "IF web.*": {
+      "main": [
+        [{"node": "IF web.search", "type": "main", "index": 0}],
+        [{"node": "IF notes.log", "type": "main", "index": 0}]
+      ]
+    },
+    "IF web.search": {
+      "main": [
+        [],
+        [{"node": "IF web.fetch", "type": "main", "index": 0}]
+      ]
+    },
+    "IF web.fetch": {
+      "main": [
+        [],
+        [{"node": "IF notes.log", "type": "main", "index": 0}]
+      ]
+    },
+    "IF notes.log": {
+      "main": [
+        [],
+        [{"node": "IF weather.get", "type": "main", "index": 0}]
+      ]
+    },
+    "IF weather.get": {
+      "main": [
+        [],
+        [{"node": "IF news.get", "type": "main", "index": 0}]
+      ]
+    },
+    "IF news.get": {
+      "main": [
+        [],
+        [{"node": "IF perplexity.search", "type": "main", "index": 0}]
+      ]
+    },
+    "IF perplexity.search": {
+      "main": [
+        [],
+        [{"node": "IF reminder.set", "type": "main", "index": 0}]
+      ]
+    },
+    "IF reminder.set": {
+      "main": [
+        [],
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {},
+  "staticData": null,
+  "tags": []
+}
