@@ -10,7 +10,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
 from app.config import Settings
-from app.core.redis_client import get_redis_client
+from app.core.redis import get_redis_client
 
 logger = logging.getLogger("sira_api_v3.core.google_auth")
 
