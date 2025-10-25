@@ -10,7 +10,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
 from app.config import Settings
-from app.core.redis import get_redis_client
+from app.core.redis import get_sync_redis_client
 
 logger = logging.getLogger("sira_api_v3.core.google_auth")
 
@@ -40,7 +40,7 @@ def get_oauth_flow(settings: Settings, redirect_uri: str) -> Flow:
 
 def save_credentials(creds: Credentials) -> None:
     """Save credentials to Redis."""
-    redis_client = get_redis_client()
+    redis_client = get_sync_redis_client()
     token_data = {
         "token": creds.token,
         "refresh_token": creds.refresh_token,
@@ -55,7 +55,7 @@ def save_credentials(creds: Credentials) -> None:
 
 def load_credentials() -> Credentials | None:
     """Load credentials from Redis."""
-    redis_client = get_redis_client()
+    redis_client = get_sync_redis_client()
     token_json = redis_client.get(REDIS_TOKEN_KEY)
     
     if not token_json:
