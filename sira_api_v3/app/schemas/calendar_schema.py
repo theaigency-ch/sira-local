@@ -57,6 +57,9 @@ class CalendarUpdateRequest(BaseModel):
     location: str | None = None
     description: str | None = None
 
+    class Config:
+        populate_by_name = True  # Allow both event_id and eventId
+
     def to_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {"event_id": self.event_id}
         if self.start:
