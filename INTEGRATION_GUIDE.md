@@ -3,9 +3,21 @@
 ## ✅ Integration abgeschlossen!
 
 **Datum**: 24. Oktober 2025  
-**Status**: Production Ready
+**Status**: Deployed (internal OK) – Public domain routing pending
 
 ---
+## Production Notes – 24.10.2025
+
+- **Coolify App**: sira_api_v3 als Application (Dockerfile-BaseDir `sira_api_v3/`), `Ports Exposes=8791`, keine Host-Port-Mappings.
+- **Domain**: Ziel `api.sira.theaigency.ch` (A-Record → 31.97.79.208). Kein `sslip.io` für Google OAuth zulässig.
+- **Status**: Uvicorn läuft intern (`http://0.0.0.0:8791`), Redis/Qdrant verbunden. Externes Routing via Traefik/ACME noch ausstehend.
+- **Empfehlung bis Domain live ist**:
+  - In Coolify Network Aliases der API: `sira-api-v3`.
+  - `SiraNet` → `N8N_TASK_URL=http://sira-api-v3:8791/webhook/sira3-tasks-create` (interne Calls funktionieren sofort).
+- **Wenn Domain verwendet wird**:
+  - `N8N_TASK_URL=https://api.sira.theaigency.ch/webhook/sira3-tasks-create` setzen.
+  - In Cloudflare `api`-Record auf 31.97.79.208; bei Timeouts optional Proxy auf „Mit Proxy (orange)“ stellen. Traefik/ACME benötigt 1–3 Minuten.
+
 
 ## Architektur
 
@@ -200,12 +212,12 @@ N8N_TASK_URL=http://sira_api_v3:8791/webhook/sira3-tasks-create
 
 ### 4. OAuth2 auf Production
 ```
-https://sira.theaigency.ch/auth/google
+https://api.sira.theaigency.ch/auth/google
 ```
 
 **Redirect URI in Google Cloud Console:**
 ```
-https://sira.theaigency.ch/auth/google/callback
+https://api.sira.theaigency.ch/auth/google/callback
 ```
 
 ---

@@ -77,7 +77,9 @@ Wichtige Env-Vars (in `.env`):
 - `OPENAI_API_KEY` - OpenAI API Key
 - `REDIS_URL` - redis://redis-sira:6379 (mit Passwort)
 - `QDRANT_URL` - http://qdrant:6333
-- `N8N_TASK_URL` - n8n Webhook für Aktionen
+- `N8N_TASK_URL` - FastAPI Tool-Layer URL
+  - Intern (Docker-Netz): `http://sira-api-v3:8791/webhook/sira3-tasks-create`
+  - Extern (Domain, sobald live): `https://api.sira.theaigency.ch/webhook/sira3-tasks-create`
 - `SIRA_TOKEN` - API-Token für Endpoints
 - `SIRA_PRIVATE_EMAIL` - User private Email
 - `SIRA_WORK_EMAIL` - User work Email
@@ -270,6 +272,30 @@ curl http://localhost:6333/collections
 4. **Dokumentation erstellt:**
    - MEMORY_TEST_REPORT.md mit allen Test-Ergebnissen
    - PROJECT_CONTEXT.md aktualisiert
+
+## Was heute (24.10.) gemacht wurde
+
+1. **FastAPI Tool-Layer integriert und deployed**
+   - Ordner `sira_api_v3/` ins Repo aufgenommen
+   - Coolify: als Application mit `Base Directory=/sira_api_v3`, `Dockerfile=./Dockerfile`
+   - `Ports Exposes=8791`, keine Host-Port-Mappings
+   - Health: Uvicorn intern erreichbar (`HTTP 200 OK` auf `127.0.0.1:8791`), Redis/Qdrant verbunden
+
+2. **SiraNet Anbindung umgestellt**
+   - `N8N_TASK_URL` auf internen Alias gesetzt: `http://sira-api-v3:8791/webhook/sira3-tasks-create`
+   - Damit funktionieren Tool-Calls im Cluster auch ohne öffentliche Domain
+
+3. **Domain & DNS eingerichtet**
+   - `api.sira.theaigency.ch` → A-Record auf `31.97.79.208` (Cloudflare)
+   - Hinweis: `sslip.io` nicht für Google OAuth zulässig
+
+4. **Offen (heute nicht abgeschlossen)**
+   - Traefik/ACME-Routing für `api.sira.theaigency.ch` noch nicht aktiv (externes `https://api.sira.theaigency.ch/docs` liefert Timeout)
+   - Nächste Schritte: Redeploy mit Domain-Bindung, ggf. Cloudflare-Proxy testweise aktivieren, Traefik/ACME-Logs prüfen
+
+5. **OAuth2 (geplant, nach Domain-Fix)**
+   - Redirect URI: `https://api.sira.theaigency.ch/auth/google/callback`
+   - Start: `https://api.sira.theaigency.ch/auth/google`
 
 ## TODO / Offene Punkte
 

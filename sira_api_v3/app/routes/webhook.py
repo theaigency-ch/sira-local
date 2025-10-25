@@ -66,11 +66,24 @@ async def webhook_handler(
         if tool == "gmail.send":
             from app.schemas.email_schema import EmailRecipient, EmailSendRequest
             
-            recipients = [EmailRecipient(email=r["email"], name=r.get("name")) for r in body.get("to", [])]
+            # Handle both SiraNet format (string) and FastAPI format (array of objects)
+            to_param = body.get("to", [])
+            if isinstance(to_param, str):
+                # SiraNet format: single email string
+                recipients = [EmailRecipient(email=to_param)]
+            elif isinstance(to_param, list):
+                # FastAPI format: array of objects
+                recipients = [EmailRecipient(email=r["email"], name=r.get("name")) for r in to_param]
+            else:
+                recipients = []
+            
+            # Handle 'text' (SiraNet) or 'body' (FastAPI) parameter
+            email_body = body.get("text") or body.get("body", "")
+            
             request_obj = EmailSendRequest(
                 to=recipients,
                 subject=body.get("subject", ""),
-                body=body.get("body", ""),
+                body=email_body,
                 cc=[EmailRecipient(email=r["email"], name=r.get("name")) for r in body.get("cc", [])] if body.get("cc") else None,
                 bcc=[EmailRecipient(email=r["email"], name=r.get("name")) for r in body.get("bcc", [])] if body.get("bcc") else None,
                 reply_to=body.get("reply_to"),
