@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     google_client_id: str | None = Field(default=None, alias="GOOGLE_CLIENT_ID")
     google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
     google_project_id: str | None = Field(default=None, alias="GOOGLE_PROJECT_ID")
+    oauth_redirect_uri: str | None = Field(default=None, alias="OAUTH_REDIRECT_URI")
 
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     serpapi_api_key: str | None = Field(default=None, alias="SERPAPI_API_KEY")

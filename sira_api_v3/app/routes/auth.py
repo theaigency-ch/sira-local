@@ -24,7 +24,12 @@ async def google_auth_start(
     settings: Settings = Depends(get_settings),
 ) -> RedirectResponse:
     """Start Google OAuth2 flow."""
-    redirect_uri = str(request.url_for("google_auth_callback"))
+    # Use configured redirect URI if available, otherwise generate from request
+    if settings.oauth_redirect_uri:
+        redirect_uri = settings.oauth_redirect_uri
+    else:
+        redirect_uri = str(request.url_for("google_auth_callback"))
+    
     flow = get_oauth_flow(settings, redirect_uri)
     authorization_url, state = flow.authorization_url(
         access_type="offline",
@@ -58,7 +63,12 @@ async def google_auth_callback(
     if not code:
         raise HTTPException(status_code=400, detail="OAuth2 failed: (missing_code) Missing code parameter in response.")
     
-    redirect_uri = str(request.url_for("google_auth_callback"))
+    # Use configured redirect URI if available, otherwise generate from request
+    if settings.oauth_redirect_uri:
+        redirect_uri = settings.oauth_redirect_uri
+    else:
+        redirect_uri = str(request.url_for("google_auth_callback"))
+    
     flow = get_oauth_flow(settings, redirect_uri)
 
     try:
