@@ -1,17 +1,17 @@
 # 🚀 Sira API v3 - Deployment Status
 
-**Letztes Update:** 25. Oktober 2025, 17:54 Uhr
+**Letztes Update:** 25. Oktober 2025, 18:32 Uhr
 
 ---
 
-## ✅ Aktueller Status: PRODUKTIV
+## ✅ Aktueller Status: PRODUKTIV & VOLLSTÄNDIG FUNKTIONSFÄHIG
 
 ### **Deployment-Details:**
 - **Platform:** Coolify v4.0.0-beta.434
 - **Server:** VPS 31.97.79.208
-- **Container:** `ss4wkgsckcog480o8oosw8wk-155152508965`
-- **Image:** `ss4wkgsckcog480o8oosw8wk:a98b9263aeeb8428af4c9b26c6e38c243281ed5e`
-- **Status:** Running ✅
+- **Container:** `ss4wkgsckcog480o8oosw8wk-162620483172`
+- **Image:** `ss4wkgsckcog480o8oosw8wk:ecf8704b9074bb33fdb50045de26f1b734ed8f2c`
+- **Status:** Running ✅ (Up 4 minutes)
 - **Port:** 8791 (intern), 8792 (extern via Port-Mapping)
 
 ---
@@ -31,7 +31,7 @@
 
 ## 🔐 OAuth2 Status
 
-### **✅ ERFOLGREICH KONFIGURIERT**
+### **✅ ERFOLGREICH KONFIGURIERT & IN REDIS PERSISTENT**
 
 **Google Cloud Console:**
 - **Projekt:** fundamental-rig-460021-p2
@@ -43,8 +43,13 @@
 - ✅ Gmail API (Emails senden, empfangen, verwalten)
 - ✅ Google Calendar API (Termine erstellen, lesen, aktualisieren)
 - ✅ Google Contacts API (Kontakte verwalten)
+- ✅ Google Tasks API
+- ✅ Google Sheets API
 
 **Tokens gespeichert in:** Redis (`redis-sira-hcs08c84g0o0sc8wwkg4ssk4`)
+- **Redis Key:** `google:oauth_token`
+- **Persistenz:** ✅ Überlebt Container-Neustarts und Redeploys
+- **Auto-Refresh:** ✅ Tokens werden automatisch erneuert
 
 ---
 
@@ -184,15 +189,30 @@ qs84sswk0wcs4kwsgw4480kk-075937552705
 
 ## 🎉 Erfolge
 
-- ✅ OAuth2 funktioniert vollständig
-- ✅ Alle Google APIs verbunden
-- ✅ FastAPI läuft stabil
+- ✅ OAuth2 funktioniert vollständig mit Redis-Persistenz
+- ✅ Alle Google APIs verbunden (Gmail, Calendar, Contacts, Tasks, Sheets)
+- ✅ FastAPI läuft stabil auf Coolify
 - ✅ Redis & Qdrant verbunden
-- ✅ n8n Integration funktioniert
+- ✅ SerpAPI Web Search funktioniert
 - ✅ Deployment via Coolify automatisiert
+- ✅ Tokens überleben Redeploys (Redis-basiert)
+- ✅ Automatisches Token-Refresh implementiert
+- ✅ Keine manuellen Test-Container mehr
+- ✅ Saubere Container-Struktur
 
 ---
 
-**Letzter erfolgreicher Deployment:** 25. Oktober 2025, 15:52 Uhr
-**Commit:** `a98b9263aeeb8428af4c9b26c6e38c243281ed5e`
-**Message:** "Fix: Add OAUTH_REDIRECT_URI config for ngrok compatibility"
+## 📊 Getestete Funktionen (25. Okt 2025, 18:30 Uhr)
+
+- ✅ **Gmail API:** 5 Emails erfolgreich abgerufen
+- ✅ **Calendar API:** Events für 31. Oktober gefunden
+- ✅ **Contacts API:** Funktioniert
+- ✅ **SerpAPI:** 5 Suchergebnisse erfolgreich
+- ✅ **Email senden:** Erfolgreich (Message ID: 19a1c33969a12c41)
+- ✅ **OAuth Tokens:** In Redis persistent gespeichert
+
+---
+
+**Letzter erfolgreicher Deployment:** 25. Oktober 2025, 18:26 Uhr
+**Commit:** `ecf8704b9074bb33fdb50045de26f1b734ed8f2c`
+**Message:** "fix: Add synchronous Redis client for OAuth token storage"
