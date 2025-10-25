@@ -55,11 +55,18 @@ async def webhook_handler(
         logger.error("Failed to parse JSON body", extra={"error": str(e)})
         raise HTTPException(status_code=400, detail="Invalid JSON") from e
 
+    # Handle both formats: direct tool parameters or nested in 'parameters'
     tool = body.get("tool")
     if not tool:
         raise HTTPException(status_code=400, detail="Missing 'tool' parameter")
-
-    logger.info("Webhook request", extra={"tool": tool})
+    
+    # If parameters are nested (new format), flatten them
+    if "parameters" in body and isinstance(body["parameters"], dict):
+        # Merge parameters into body for backward compatibility
+        params = body.pop("parameters")
+        body.update(params)
+    
+    logger.info("Webhook request", extra={"tool": tool, "body": body})
 
     try:
         # Gmail Tools
@@ -158,11 +165,30 @@ async def webhook_handler(
             from datetime import datetime
             from app.schemas.calendar_schema import CalendarListRequest
             
+            # Handle both date formats from SiraNet
+            date_param = body.get("date")
+            start_param = body.get("start") or body.get("timeMin")
+            end_param = body.get("end") or body.get("timeMax")
+            
+            # Parse dates if provided
+            start_dt = None
+            end_dt = None
+            if start_param:
+                try:
+                    start_dt = datetime.fromisoformat(start_param.replace('Z', '+00:00'))
+                except:
+                    pass
+            if end_param:
+                try:
+                    end_dt = datetime.fromisoformat(end_param.replace('Z', '+00:00'))
+                except:
+                    pass
+            
             request_obj = CalendarListRequest(
-                date=body.get("date"),
-                start=datetime.fromisoformat(body["start"]) if body.get("start") else None,
-                end=datetime.fromisoformat(body["end"]) if body.get("end") else None,
-                limit=body.get("limit", 10),
+                date=date_param,
+                start=start_dt,
+                end=end_dt,
+                limit=body.get("limit") or body.get("maxResults", 10),
             )
             data = await calendar_service.list_events(request_obj)
             return {"ok": True, "data": data}
