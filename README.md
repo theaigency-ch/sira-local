@@ -1,20 +1,21 @@
-# 🇨🇭 Sales AI Agent für Deutschschweiz
+# 🚀 Sira - AI Assistant Platform
 
-**Stabiles System mit Clay + LinkedIn Sales Navigator**
+**Vollständige KI-Assistentin mit FastAPI, n8n und Google APIs**
 
 ---
 
 ## 📋 Übersicht
 
-Vollautomatischer Sales Agent für Deutschschweizer Dienstleister:
-- Findet Leads via Clay + LinkedIn Sales Navigator
-- Generiert personalisierte E-Mails auf Deutsch
-- Automatische Follow-ups & Reply Intelligence
-- Meeting Automation & Weekly Reports
+Sira ist eine vollautomatische KI-Assistentin für:
+- **Email Management** via Gmail API
+- **Kalender-Integration** via Google Calendar API
+- **Kontakt-Verwaltung** via Google Contacts API
+- **Web-Suche & Research** via Perplexity & SerpAPI
+- **Task-Automation** via n8n Workflows
 
-**Stabilität:** 91% (keine experimentellen Features)
-**Zielgruppe:** Makler, Anwälte, Treuhänder, Personalbüros, etc.
-**Region:** Nur Deutschschweiz (Zürich, Basel, Bern, Luzern, Zug, St. Gallen)
+**Status:** ✅ Produktiv (OAuth2 funktioniert, alle APIs verbunden)
+**Deployment:** Coolify auf VPS (31.97.79.208)
+**Region:** Schweiz (Zürich)
 
 ---
 
