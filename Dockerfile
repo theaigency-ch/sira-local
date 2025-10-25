@@ -5,12 +5,16 @@ RUN apk add --no-cache ca-certificates curl bash tini jq file && update-ca-certi
 ENV NODE_OPTIONS=--dns-result-order=ipv4first
 WORKDIR /app
 
+# Install WebSocket dependency
+RUN npm install ws
+
 # --- server.js (komplett korrigiert) ---
 RUN cat > server.js <<'JS'
 const http = require('http');
 const fs   = require('fs');
 const net  = require('net');
 const dns  = require('dns'); dns.setDefaultResultOrder('ipv4first');
+const WebSocket = require('ws');
 
 const PORT  = process.env.PORT || 8787;
 const BASE  = (process.env.OPENAI_BASE || 'https://api.openai.com').replace(/\/+$/,'');
@@ -1717,6 +1721,31 @@ const srv=http.createServer(async (req,res)=>{
     noStore(res,'application/json');
     return res.end(JSON.stringify(result));
   }
+  
+  // Incoming Call Webhook (Twilio → Realtime)
+  if (req.method==='POST' && p==='/sira/phone/incoming'){
+    const body = await readBody(req);
+    const from = body.From || 'unbekannt';
+    const to = body.To || '';
+    const callSid = body.CallSid || '';
+    
+    console.log('[Phone] Incoming call from', from, 'to', to, 'CallSid:', callSid);
+    
+    // TwiML mit WebSocket Stream
+    const streamUrl = 'wss://' + (req.headers.host || 'localhost:8787') + '/sira/phone/stream/' + callSid;
+    const twiml = '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Response>' +
+        '<Say voice="Polly.Vicki" language="de-DE">Hallo, hier ist Sira.</Say>' +
+        '<Connect>' +
+          '<Stream url="' + streamUrl + '">' +
+            '<Parameter name="From" value="' + from + '"/>' +
+          '</Stream>' +
+        '</Connect>' +
+      '</Response>';
+    
+    res.writeHead(200, {'content-type': 'text/xml'});
+    return res.end(twiml);
+  }
 
   // Memory
   if (req.method==='GET' && p==='/sira/memory'){ if(!checkToken(req,res)) return;
@@ -1879,6 +1908,160 @@ const srv=http.createServer(async (req,res)=>{
   // Default
   noStore(res,'text/plain'); res.end('SiraNet ready');
 });
+
+// ==================== TWILIO + REALTIME API TELEFONIE ====================
+const wss = new WebSocket.Server({ noServer: true });
+const phoneSessions = new Map();
+
+// Audio Format Konvertierung
+function mulawToPcm16(mulawData) {
+  const pcm16 = Buffer.alloc(mulawData.length * 2);
+  for (let i = 0; i < mulawData.length; i++) {
+    let mulaw = ~mulawData[i];
+    const sign = mulaw & 0x80;
+    const exponent = (mulaw >> 4) & 0x07;
+    const mantissa = mulaw & 0x0F;
+    let sample = ((mantissa << 3) + 0x84) << exponent;
+    if (sign) sample = -sample;
+    pcm16.writeInt16LE(sample, i * 2);
+  }
+  return pcm16;
+}
+
+function pcm16ToMulaw(pcm16Data) {
+  const mulaw = Buffer.alloc(pcm16Data.length / 2);
+  for (let i = 0; i < pcm16Data.length; i += 2) {
+    let sample = pcm16Data.readInt16LE(i);
+    const sign = sample < 0 ? 0x80 : 0;
+    if (sample < 0) sample = -sample;
+    sample += 0x84;
+    if (sample > 0x1FFF) sample = 0x1FFF;
+    let exponent = 7;
+    for (let exp = 0; exp < 8; exp++) {
+      if (sample <= (0xFF << exp)) { exponent = exp; break; }
+    }
+    const mantissa = (sample >> (exponent + 3)) & 0x0F;
+    mulaw[i / 2] = ~(sign | (exponent << 4) | mantissa);
+  }
+  return mulaw;
+}
+
+// WebSocket Handler
+wss.on('connection', async (ws, req) => {
+  const url = new URL('http://localhost' + req.url);
+  const sessionId = url.pathname.split('/').pop();
+  console.log('[Phone] WS verbunden:', sessionId);
+  
+  let streamSid = null, callSid = null, openaiWs = null;
+  
+  try {
+    openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=' + MODEL_RT, {
+      headers: { 'Authorization': 'Bearer ' + KEY, 'OpenAI-Beta': 'realtime=v1' }
+    });
+    
+    openaiWs.on('open', () => {
+      console.log('[Phone] OpenAI verbunden');
+      const profile = { name: PHONE_OWNER, email_private: PRIV, email_work: WORK };
+      const profileLine = 'Name=' + (profile.name||'-') + ' | Privat=' + (profile.email_private||'-') + ' | Arbeit=' + (profile.email_work||'-');
+      const instructions = 'Du bist Sira, die Assistentin von ' + PHONE_OWNER + '.\\n' +
+        'Benutzerprofil: ' + profileLine + '\\n' +
+        'Sei freundlich und professionell. Frage worum es geht und hilf dem Anrufer.\\n' +
+        'Du kannst Termine erstellen (calendar_create) und Notizen speichern (notes_log).';
+      
+      openaiWs.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          modalities: ['audio', 'text'],
+          instructions: instructions,
+          voice: VOICE_RT,
+          input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
+          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 500 },
+          tools: [
+            { type: 'function', name: 'calendar_create', description: 'Erstellt Termin', parameters: { type: 'object', properties: { summary: {type: 'string'}, start: {type: 'string'}, end: {type: 'string'} }, required: ['summary', 'start', 'end'] } },
+            { type: 'function', name: 'notes_log', description: 'Speichert Notiz', parameters: { type: 'object', properties: { note: {type: 'string'} }, required: ['note'] } }
+          ]
+        }
+      }));
+    });
+    
+    openaiWs.on('message', (data) => {
+      try {
+        const event = JSON.parse(data.toString());
+        if (event.type === 'response.audio.delta' && event.delta && streamSid) {
+          const pcm16 = Buffer.from(event.delta, 'base64');
+          const mulaw = pcm16ToMulaw(pcm16);
+          ws.send(JSON.stringify({ event: 'media', streamSid: streamSid, media: { payload: mulaw.toString('base64') } }));
+        }
+        if (event.type === 'conversation.item.input_audio_transcription.completed') {
+          console.log('[Phone] User:', event.transcript);
+          memAppend('Phone(User): ' + event.transcript);
+        }
+        if (event.type === 'response.done') {
+          const text = event.response?.output?.[0]?.content?.[0]?.transcript;
+          if (text) { console.log('[Phone] Sira:', text); memAppend('Phone(Sira): ' + text); }
+        }
+        if (event.type === 'response.function_call_arguments.done') {
+          console.log('[Phone] Function:', event.name);
+          (async () => {
+            let result = { ok: false };
+            try {
+              if (event.name === 'calendar_create') {
+                const fwd = await forwardToN8N({ tool: 'calendar_create', ...JSON.parse(event.arguments) });
+                result = JSON.parse(fwd.body);
+              } else if (event.name === 'notes_log') {
+                memAppend('Phone(Note): ' + JSON.parse(event.arguments).note);
+                result = { ok: true };
+              }
+            } catch (e) { result = { ok: false, error: e.message }; }
+            if (openaiWs.readyState === WebSocket.OPEN) {
+              openaiWs.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: event.call_id, output: JSON.stringify(result) } }));
+              openaiWs.send(JSON.stringify({ type: 'response.create' }));
+            }
+          })();
+        }
+      } catch (e) { console.log('[Phone] OpenAI Error:', e.message); }
+    });
+    
+    openaiWs.on('error', (err) => console.log('[Phone] OpenAI WS Error:', err.message));
+    openaiWs.on('close', () => { console.log('[Phone] OpenAI closed'); ws.close(); });
+    
+  } catch (e) { console.log('[Phone] Setup Error:', e.message); ws.close(); return; }
+  
+  ws.on('message', (message) => {
+    try {
+      const msg = JSON.parse(message.toString());
+      if (msg.event === 'start') {
+        streamSid = msg.start.streamSid;
+        callSid = msg.start.callSid;
+        console.log('[Phone] Stream started:', streamSid);
+        phoneSessions.set(callSid, { streamSid, openaiWs });
+      } else if (msg.event === 'media' && msg.media?.payload && openaiWs?.readyState === WebSocket.OPEN) {
+        const mulaw = Buffer.from(msg.media.payload, 'base64');
+        const pcm16 = mulawToPcm16(mulaw);
+        openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: pcm16.toString('base64') }));
+      } else if (msg.event === 'stop') {
+        console.log('[Phone] Stream stopped');
+        if (openaiWs) openaiWs.close();
+        phoneSessions.delete(callSid);
+      }
+    } catch (e) { console.log('[Phone] Twilio Error:', e.message); }
+  });
+  
+  ws.on('close', () => { console.log('[Phone] Twilio closed'); if (openaiWs) openaiWs.close(); if (callSid) phoneSessions.delete(callSid); });
+  ws.on('error', (err) => console.log('[Phone] Twilio WS Error:', err.message));
+});
+
+srv.on('upgrade', (req, socket, head) => {
+  const url = new URL('http://localhost' + req.url);
+  if (url.pathname.startsWith('/sira/phone/stream/')) {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  } else {
+    socket.destroy();
+  }
+});
+
+console.log('[Phone] WebSocket Server bereit');
 
 srv.listen(PORT, ()=> console.log('SiraNet ready on '+PORT));
 JS
