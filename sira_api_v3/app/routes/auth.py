@@ -38,13 +38,31 @@ async def google_auth_start(
 @router.get("/google/callback")
 async def google_auth_callback(
     request: Request,
+    code: str = None,
+    state: str = None,
+    error: str = None,
     settings: Settings = Depends(get_settings),
 ) -> HTMLResponse:
     """Handle Google OAuth2 callback."""
+    # Log what we received
+    logger.info("OAuth callback received", extra={
+        "code": code[:20] + "..." if code else None,
+        "state": state,
+        "error": error,
+        "full_url": str(request.url)
+    })
+    
+    if error:
+        raise HTTPException(status_code=400, detail=f"OAuth2 error: {error}")
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="OAuth2 failed: (missing_code) Missing code parameter in response.")
+    
     redirect_uri = str(request.url_for("google_auth_callback"))
     flow = get_oauth_flow(settings, redirect_uri)
 
     try:
+        # Use the full URL with query parameters
         flow.fetch_token(authorization_response=str(request.url))
         credentials = flow.credentials
         save_credentials(credentials)
