@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  sira-api-v3:
+    build:
+      context: ./sira_api_v3
+      dockerfile: Dockerfile
+    container_name: sira-api-v3
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_PROJECT_ID=${GOOGLE_PROJECT_ID}
+      - REDIS_URL=${REDIS_URL}
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - SERPAPI_KEY=${SERPAPI_KEY:-}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - SIRA_PRIVATE_EMAIL=${SIRA_PRIVATE_EMAIL}
+      - SIRA_WORK_EMAIL=${SIRA_WORK_EMAIL}
+      - SIRA_MEM_AUTOSAVE=${SIRA_MEM_AUTOSAVE:-1}
+      - SIRA_MEM_MAX=${SIRA_MEM_MAX:-12000}
+      - SIRA_INSTRUCTIONS=${SIRA_INSTRUCTIONS}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - PORT=8791
+    volumes:
+      - sira-api-v3-data:/app/data
+    restart: unless-stopped
+    networks:
+      - coolify
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import http.client; c = http.client.HTTPConnection(\"127.0.0.1\", 8791, timeout=3); c.request(\"GET\", \"/docs\"); r = c.getresponse(); exit(0 if r.status == 200 else 1)'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sira-api-v3.rule=Host(`api.sira.theaigency.ch`)"
+      - "traefik.http.routers.sira-api-v3.entrypoints=https"
+      - "traefik.http.routers.sira-api-v3.tls=true"
+      - "traefik.http.routers.sira-api-v3.tls.certresolver=letsencrypt"
+      - "traefik.http.services.sira-api-v3.loadbalancer.server.port=8791"
+
+networks:
+  coolify:
+    external: true
+
+volumes:
+  sira-api-v3-data:
