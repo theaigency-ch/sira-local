@@ -3,8 +3,8 @@ version: '3.9'
 services:
   sira-api-v3:
     build:
-      context: ./sira_api_v3
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: sira_api_v3/Dockerfile
     container_name: sira-api-v3
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}

@@ -6,11 +6,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY sira_api_v3/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
-COPY .env.example .env.example
+COPY sira_api_v3/app ./app
+COPY sira_api_v3/.env.example .env.example
 
 EXPOSE 8791
 
