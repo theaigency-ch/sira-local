@@ -50,15 +50,14 @@ class CalendarCreateRequest(BaseModel):
 
 
 class CalendarUpdateRequest(BaseModel):
+    model_config = {"populate_by_name": True}  # Allow both event_id and eventId
+    
     event_id: str = Field(alias="eventId")
     start: datetime | None = None
     end: datetime | None = None
     summary: str | None = None
     location: str | None = None
     description: str | None = None
-
-    class Config:
-        populate_by_name = True  # Allow both event_id and eventId
 
     def to_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {"event_id": self.event_id}
