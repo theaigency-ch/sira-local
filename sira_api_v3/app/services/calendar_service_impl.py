@@ -150,12 +150,18 @@ class CalendarServiceImpl:
         else:
             start, end = self._parse_date_selector("today")
 
+        # Format time for Google Calendar API (RFC3339)
+        # If datetime is naive (no timezone), add Z
+        # If datetime has timezone, use as-is
+        time_min = start.isoformat() if start.tzinfo else start.isoformat() + "Z"
+        time_max = end.isoformat() if end.tzinfo else end.isoformat() + "Z"
+
         result = (
             service.events()
             .list(
                 calendarId="primary",
-                timeMin=start.isoformat() + "Z",
-                timeMax=end.isoformat() + "Z",
+                timeMin=time_min,
+                timeMax=time_max,
                 maxResults=request.limit,
                 singleEvents=True,
                 orderBy="startTime",
