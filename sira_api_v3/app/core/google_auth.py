@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from google.auth.transport.requests import Request
@@ -11,10 +10,11 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
 from app.config import Settings
+from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger("sira_api_v3.core.google_auth")
 
-TOKEN_FILE = Path("/app/data/google_token.json")
+REDIS_TOKEN_KEY = "google:oauth_token"
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/calendar",
@@ -39,31 +39,30 @@ def get_oauth_flow(settings: Settings, redirect_uri: str) -> Flow:
 
 
 def save_credentials(creds: Credentials) -> None:
-    """Save credentials to file."""
-    TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with TOKEN_FILE.open("w") as f:
-        json.dump(
-            {
-                "token": creds.token,
-                "refresh_token": creds.refresh_token,
-                "token_uri": creds.token_uri,
-                "client_id": creds.client_id,
-                "client_secret": creds.client_secret,
-                "scopes": creds.scopes,
-            },
-            f,
-        )
-    logger.info("Google credentials saved", extra={"token_file": str(TOKEN_FILE)})
+    """Save credentials to Redis."""
+    redis_client = get_redis_client()
+    token_data = {
+        "token": creds.token,
+        "refresh_token": creds.refresh_token,
+        "token_uri": creds.token_uri,
+        "client_id": creds.client_id,
+        "client_secret": creds.client_secret,
+        "scopes": creds.scopes,
+    }
+    redis_client.set(REDIS_TOKEN_KEY, json.dumps(token_data))
+    logger.info("Google credentials saved to Redis", extra={"key": REDIS_TOKEN_KEY})
 
 
 def load_credentials() -> Credentials | None:
-    """Load credentials from file."""
-    if not TOKEN_FILE.exists():
-        logger.warning("No Google token file found", extra={"token_file": str(TOKEN_FILE)})
+    """Load credentials from Redis."""
+    redis_client = get_redis_client()
+    token_json = redis_client.get(REDIS_TOKEN_KEY)
+    
+    if not token_json:
+        logger.warning("No Google token found in Redis", extra={"key": REDIS_TOKEN_KEY})
         return None
 
-    with TOKEN_FILE.open("r") as f:
-        token_data = json.load(f)
+    token_data = json.loads(token_json)
 
     creds = Credentials(
         token=token_data.get("token"),
