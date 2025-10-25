@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 
 class ReminderSetRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     title: str = Field(max_length=200)
     due: datetime = Field(alias="date")
     notes: str | None = None

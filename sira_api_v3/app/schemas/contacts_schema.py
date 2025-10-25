@@ -15,6 +15,8 @@ class ContactFindRequest(BaseModel):
 
 
 class ContactUpsertRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     email: EmailStr
     first_name: str | None = Field(default=None, alias="firstName")
     last_name: str | None = Field(default=None, alias="lastName")

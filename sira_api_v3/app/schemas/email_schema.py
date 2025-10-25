@@ -12,12 +12,16 @@ class EmailRecipient(BaseModel):
 
 
 class EmailAttachment(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     filename: str = Field(max_length=255)
     content: str = Field(description="Base64 encoded attachment content")
     mime_type: str | None = Field(default=None, alias="mimeType")
 
 
 class EmailSendRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     to: Sequence[EmailRecipient] = Field(min_length=1)
     subject: str = Field(max_length=240)
     body: str
@@ -39,6 +43,8 @@ class EmailSendRequest(BaseModel):
 
 
 class EmailReplyRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     thread_id: str = Field(max_length=256, alias="threadId")
     message_id: str = Field(max_length=256, alias="messageId")
     body: str
@@ -59,6 +65,8 @@ class EmailReplyRequest(BaseModel):
 
 
 class EmailGetRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     filter: str | None = Field(default=None, max_length=500)
     limit: int = Field(default=5, ge=1, le=50)
     label_ids: Sequence[str] | None = Field(default=None, alias="labelIds")

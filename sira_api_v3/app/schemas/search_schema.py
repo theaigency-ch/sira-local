@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field, HttpUrl
 
 
 class WebSearchRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     query: str = Field(max_length=500)
     location: str | None = None
     language: str | None = None
@@ -27,6 +29,8 @@ class WebSearchRequest(BaseModel):
 
 
 class WebFetchRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    
     url: HttpUrl
     render_js: bool = Field(default=False, alias="renderJs")
 
